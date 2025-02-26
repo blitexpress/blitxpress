@@ -35,6 +35,7 @@ class Order extends Model
 
     public function create_payment_link()
     {
+        return;
         $stripe = env('STRIPE_KEY');
         if (($this->stripe_id != null) && (strlen($this->stripe_id) > 0)) {
             return;

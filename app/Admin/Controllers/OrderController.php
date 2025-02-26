@@ -28,8 +28,7 @@ class OrderController extends AdminController
     protected function grid()
     {
         $grid = new Grid(new Order());
-        $grid->model()->orderBy('id', 'desc');
-        $grid->disableBatchActions();
+        $grid->model()->orderBy('id', 'desc'); 
         $grid->quickSearch('customer_name')->placeholder('Search by customer name');
         $grid->column('id', __('Id'))->sortable();
         //$grid->disableBatchActions();

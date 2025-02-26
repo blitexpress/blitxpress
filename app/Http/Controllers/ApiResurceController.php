@@ -615,8 +615,8 @@ class ApiResurceController extends Controller
         }
 
         if ($order->stripe_url == null || strlen($order->stripe_url) < 8) {
-            $order->create_payment_link();
-            $order->save();
+          /*   $order->create_payment_link();
+            $order->save(); */
         }
 
         return $this->success($order, $message = "Success!", 200);
@@ -877,10 +877,10 @@ class ApiResurceController extends Controller
         $order->amount = $order_total;
         $order->save();
 
-        if ($order->stripe_url == null || strlen($order->stripe_url) < 6) {
+        /* if ($order->stripe_url == null || strlen($order->stripe_url) < 6) {
             $order->create_payment_link();
             $order->save();
-        }
+        } */
         $order = Order::find($order->id);
 
         return $this->success($order, $message = "Submitted successfully!", 200);
