@@ -48,6 +48,8 @@ Route::get('api/{model}', [ApiResurceController::class, 'index']);
 
 
 
+Route::get('manifest', [ApiAuthController::class, 'manifest']);
+
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();

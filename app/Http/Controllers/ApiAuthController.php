@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\Product;
+use App\Models\ProductCategory;
 use App\Models\User;
 use App\Models\Utils;
 use App\Traits\ApiResponser;
@@ -30,7 +32,54 @@ class ApiAuthController extends Controller
             'password' => 'admin',
         ]);
         die($token); */
-        $this->middleware('auth:api', ['except' => ['login', 'register']]);
+        $this->middleware('auth:api', ['except' => [
+            'manifest',
+            'login',
+            'register'
+        ]]);
+    }
+
+
+    public function manifest()
+    {
+
+        $carbon = new Carbon();
+        $TOP_PRODUCTS = Product::where([])->orderBy('id', 'desc')->limit(1000)->get();
+        $TOP_PRODUCTS = $TOP_PRODUCTS->shuffle();
+        $TOP_4_PRODUCTS = $TOP_PRODUCTS->take(4);
+
+        $SECTION_1_PRODUCTS = [];
+        //TAKE NEXT 20 without the first 4
+        if (count($TOP_PRODUCTS) > 4) {
+            $SECTION_1_PRODUCTS = $TOP_PRODUCTS->slice(4, 30);
+        } else {
+            $SECTION_1_PRODUCTS = $TOP_PRODUCTS;
+        }
+
+        $SECTION_2_PRODUCTS = [];
+        //TAKE NEXT 20 without the first 24
+        if (count($TOP_PRODUCTS) > 24) {
+            $SECTION_2_PRODUCTS = $TOP_PRODUCTS->slice(34, 30);
+        } else {
+            $SECTION_2_PRODUCTS = $TOP_PRODUCTS;
+        }
+
+        $manifest = [
+            'FIRST_BANNER' => ProductCategory::where([
+                'is_first_banner' => 'Yes'
+            ])->first(),
+            'SLIDER_CATEGORIES' => ProductCategory::where([
+                'show_in_banner' => 'Yes'
+            ])->get(),
+            'TOP_4_PRODUCTS' => $TOP_4_PRODUCTS,
+            'CATEGORIES' => ProductCategory::where([
+                'show_in_categories' => 'Yes'
+            ])->get(),
+            'SECTION_1_PRODUCTS' => $SECTION_1_PRODUCTS,
+            'SECTION_2_PRODUCTS' => $SECTION_2_PRODUCTS,
+        ];
+
+        return $this->success($manifest, 'Success');
     }
 
 

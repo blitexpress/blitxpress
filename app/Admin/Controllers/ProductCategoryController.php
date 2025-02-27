@@ -43,6 +43,9 @@ class ProductCategoryController extends AdminController
         $grid->column('show_in_categories', __('Show in Categories'))
             ->editable('select', ['Yes' => 'Yes', 'No' => 'No'])
             ->sortable();
+        //is_first_banner
+        $grid->column('is_first_banner', __('Is First Banner'))
+            ->sortable();
 
         return $grid;
     }
@@ -101,13 +104,23 @@ class ProductCategoryController extends AdminController
             })->rules('required');
 
 
-        $form->list('attributes', __('Category Attributes'))->required();
-        $form->image('image', __('Main Photo'))->required();
-        $form->image('banner_image', __('Banner image'));
+        // $form->list('attributes', __('Category Attributes'))->required();
+        $form->image('image', __('Main Photo'))->required()->uniqueName();
+        $form->image('banner_image', __('Banner image'))->uniqueName();
 
 
         $form->radio('show_in_banner', __('Show in banner'))->options(['Yes' => 'Yes', 'No' => 'No'])->required();
         $form->radio('show_in_categories', __('Show in categories'))->options(['Yes' => 'Yes', 'No' => 'No'])->required();
+        //is_first_banner
+        $form->radio('is_first_banner', __('Is First Banner'))->options(['Yes' => 'Yes', 'No' => 'No'])
+            ->when('Yes', function (Form $form) {
+                $form->image('first_banner_image', __('First Banner Image'))
+                    ->uniqueName();
+            });
+        /* 
+                    $table->string('is_first_banner')->default('No')->nullable();
+            $table->text('first_banner_image')->nullable()->nullable();
+        */
 
         return $form;
     }

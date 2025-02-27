@@ -615,7 +615,7 @@ class ApiResurceController extends Controller
         }
 
         if ($order->stripe_url == null || strlen($order->stripe_url) < 8) {
-          /*   $order->create_payment_link();
+            /*   $order->create_payment_link();
             $order->save(); */
         }
 
@@ -1313,9 +1313,65 @@ class ApiResurceController extends Controller
     {
         return $this->success(CounsellingCentre::where([])->orderby('id', 'desc')->get(), 'Success');
     }
-    public function products()
+
+
+    public function products(Request $request)
     {
-        return $this->success(Product::where([])->orderby('id', 'desc')->get(), 'Success');
+        // Start building the query on active products
+        $query = Product::where('status', '1');
+
+        // Filter by search keyword (in the name or description)
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'LIKE', "%{$search}%")
+                    ->orWhere('description', 'LIKE', "%{$search}%");
+            });
+        }
+
+        // Filter by category
+        if ($request->filled('category')) {
+            $query->where('category', $request->input('category'));
+        }
+
+        // Filter by price range
+        if ($request->filled('min_price')) {
+            $query->where('price_1', '>=', $request->input('min_price'));
+        }
+        if ($request->filled('max_price')) {
+            $query->where('price_2', '<=', $request->input('max_price'));
+        }
+
+        // Filter by availability
+        if ($request->filled('availability')) {
+            $query->where('in_stock', $request->input('availability'));
+        }
+
+        // Sorting logic based on 'sort' parameter
+        if ($request->filled('sort')) {
+            $sort = $request->input('sort');
+            if ($sort === "Newest") {
+                $query->orderBy('created_at', 'DESC');
+            } elseif ($sort === "Oldest") {
+                $query->orderBy('created_at', 'ASC');
+            } elseif ($sort === "High Price") {
+                $query->orderBy('price_2', 'DESC');
+            } elseif ($sort === "Low Price") {
+                $query->orderBy('price_1', 'ASC');
+            } else {
+                // Fallback ordering
+                $query->orderBy('id', 'DESC');
+            }
+        } else {
+            // Default ordering
+            $query->orderBy('id', 'DESC');
+        }
+
+        // Paginate results (default 16 per page)
+        $perPage = $request->input('per_page', 28);
+        $products = $query->paginate($perPage);
+
+        return $this->success($products, 'Success');
     }
 
     public function categories()
