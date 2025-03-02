@@ -622,6 +622,26 @@ class ApiResurceController extends Controller
         return $this->success($order, $message = "Success!", 200);
     }
 
+    //product_get_by_id
+    public function product_get_by_id(Request $r)
+    {
+        $product = Product::find($r->id);
+        if ($product == null) {
+            return $this->error('Product not found.');
+        }
+        return $this->success($product, $message = "Success!", 200);
+    } 
+
+    //orders_get_by_id
+    public function orders_get_by_id(Request $r)
+    {
+        $order = Order::find($r->id);
+        if ($order == null) {
+            return $this->error('Order not found.');
+        }
+        return $this->success($order, $message = "Success!", 200);
+    } 
+
 
     public function orders_get(Request $r)
     {
@@ -694,6 +714,11 @@ class ApiResurceController extends Controller
             $u = Administrator::find($administrator_id);
         }
 
+
+        if ($u == null) {
+            return $this->error('User not found.');
+        }
+
         $items = [];
         try {
             $items = json_decode($r->items);
@@ -707,9 +732,6 @@ class ApiResurceController extends Controller
             }
         }
 
-        if ($u == null) {
-            return $this->error('User not found.');
-        }
 
         $delivery = null;
         try {
@@ -1326,6 +1348,13 @@ class ApiResurceController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'LIKE', "%{$search}%")
                     ->orWhere('description', 'LIKE', "%{$search}%");
+            });
+        }
+        if ($request->filled('name')) {
+            $name = $request->input('name');
+            $query->where(function ($q) use ($name) {
+                $q->where('name', 'LIKE', "%{$name}%")
+                    ->orWhere('description', 'LIKE', "%{$name}%");
             });
         }
 
