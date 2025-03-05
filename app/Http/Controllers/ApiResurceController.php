@@ -630,7 +630,7 @@ class ApiResurceController extends Controller
             return $this->error('Product not found.');
         }
         return $this->success($product, $message = "Success!", 200);
-    } 
+    }
 
     //orders_get_by_id
     public function orders_get_by_id(Request $r)
@@ -640,7 +640,7 @@ class ApiResurceController extends Controller
             return $this->error('Order not found.');
         }
         return $this->success($order, $message = "Success!", 200);
-    } 
+    }
 
 
     public function orders_get(Request $r)
@@ -1337,6 +1337,12 @@ class ApiResurceController extends Controller
     }
 
 
+    public function products_1(Request $request)
+    {
+        //latest 1000 products without pagination
+        $products = Product::where([])->limit(1000)->get();
+        return $this->success($products, 'Success'); 
+    }
     public function products(Request $request)
     {
         // Start building the query on active products

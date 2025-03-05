@@ -36,6 +36,7 @@ Route::get("delivery-addresses", [ApiResurceController::class, "delivery_address
 Route::get("locations", [ApiResurceController::class, "locations"]);
 Route::get("categories", [ApiResurceController::class, "categories"]);
 Route::get('products', [ApiResurceController::class, 'products']);
+Route::get('products-1', [ApiResurceController::class, 'products_1']);
 Route::post('products-delete', [ApiResurceController::class, 'products_delete']);
 Route::post('images-delete', [ApiResurceController::class, 'images_delete']);
 Route::post('chat-start', [ApiResurceController::class, 'chat_start']);
