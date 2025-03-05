@@ -31,7 +31,7 @@ class Utils extends Model
             } 
             //validate env('MAIL_FROM_ADDRESS'
             if (empty(env('MAIL_FROM_ADDRESS')) || !filter_var(env('MAIL_FROM_ADDRESS'), FILTER_VALIDATE_EMAIL)) {
-                throw new Exception('Invalid or missing sender email address.');
+                throw new Exception('Invalid or missing sender email address. MAIL: ' . env('MAIL_FROM_ADDRESS')); 
             } 
             Mail::send(
                 $template,
