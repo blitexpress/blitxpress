@@ -21,12 +21,14 @@ class Utils extends Model
         return time() . "-" . rand(100000, 1000000) . '-' . rand(100000, 1000000);
     }
 
-
     //mail sender
     public static function mail_sender($data)
     {
         $template = 'mail-1';
         try {
+            if (empty($data['email']) || !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+                throw new Exception('Invalid or missing recipient email address.');
+            } 
             Mail::send(
                 $template,
                 [
@@ -35,13 +37,9 @@ class Utils extends Model
                     'subject' => $data['subject']
                 ],
                 function ($m) use ($data) {
-                    if (filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
-                        $m->to($data['email'], $data['name'])
-                            ->subject($data['subject'] . ' - ' . date('Y-m-d'));
-                        $m->from(env('MAIL_FROM_ADDRESS'), $data['subject']);
-                    } else {
-                        throw new Exception('Invalid email address.');
-                    }
+                    $m->to($data['email'], $data['name'])
+                        ->subject($data['subject'] . ' - ' . date('Y-m-d'));
+                    $m->from(env('MAIL_FROM_ADDRESS') ?: 'no-reply@example.com', $data['subject']);
                 }
             );
         } catch (\Throwable $th) {
