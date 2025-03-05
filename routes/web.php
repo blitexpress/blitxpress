@@ -12,6 +12,20 @@ use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 
+
+
+Route::get('mail-test', function () {
+
+    $data['body'] = 'This should be the body of the <b>email</b>.';
+    $data['data'] = $data['body'];
+    $data['name'] = 'Hohn peter';
+    $data['email'] = 'mubahood360@gmail.com';
+    $data['subject'] = 'TEST UGANDA ' . ' - M-Omulimisa';
+
+    Utils::mail_sender($data);
+    die("success");
+});
+
 Route::get('test', function () {
 
     return;
