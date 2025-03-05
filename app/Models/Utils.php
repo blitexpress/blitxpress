@@ -36,7 +36,7 @@ class Utils extends Model
                 function ($m) use ($data) {
                     $m->to($data['email'], $data['name'])
                         ->subject($data['subject']);
-                    $m->from('noreply@hambren.com', $data['subject']);
+                    $m->from(env('MAIL_FROM_ADDRESS'), $data['subject']);
                 }
             );
         } catch (\Throwable $th) {
