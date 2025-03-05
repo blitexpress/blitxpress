@@ -56,7 +56,7 @@ class User extends Authenticatable implements JWTSubject
     {
         $u = $this;
         $u->intro = rand(100000, 999999);
-        $u->save();
+        $u->save(); 
         $data['email'] = $email;
         if ($email == null || $email == "") {
             throw new \Exception("Email is required.");
