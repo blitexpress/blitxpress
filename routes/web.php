@@ -8,6 +8,7 @@ use App\Models\Gen;
 use App\Models\Utils;
 use Carbon\Carbon;
 use Dflydev\DotAccessData\Util;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
@@ -73,13 +74,43 @@ Route::get('test', function () {
         throw new \Exception("Error Processing Request", 1);
     }
 });
+
+
+
 Route::get('migrate', function () {
-    //do run laravel migration command
     // Artisan::call('migrate');
+    //do run laravel migration command
     Artisan::call('migrate', ['--force' => true]);
     //returning the output
     return Artisan::output();
 });
+
+Route::get('clear', function () {
+
+    Artisan::call('config:clear');
+    Artisan::call('cache:clear');
+    Artisan::call('route:clear');
+    Artisan::call('view:clear');
+    Artisan::call('optimize');
+    Artisan::call('cache:clear');
+    Artisan::call('view:clear');
+    Artisan::call('route:clear');
+    Artisan::call('config:clear');
+    Artisan::call('optimize:clear');
+    exec('composer dump-autoload -o');
+    return Artisan::output();
+});
+Route::get('artisan', function (Request $request) {
+    // Artisan::call('migrate');
+    //do run laravel migration command
+    //php artisan l5-swagger:generate
+    Artisan::call($request->command, ['--force' => true]);
+    //returning the output
+    return Artisan::output();
+});
+
+
+
 
 Route::match(['get', 'post'], '/pay', function () {
     $id = 1;
