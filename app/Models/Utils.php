@@ -5,6 +5,7 @@ namespace App\Models;
 use Berkayk\OneSignal\OneSignalClient;
 use Carbon\Carbon;
 use Encore\Admin\Facades\Admin;
+use Exception;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Mail;
@@ -24,27 +25,25 @@ class Utils extends Model
     //mail sender
     public static function mail_sender($data)
     {
+        $template = 'mail-1';
         try {
             Mail::send(
-                'mail',
+                $template,
                 [
-                    'body' => view('mail-1', [
-                        'body' => $data['body'],
-                    ]),
-                    'title' => $data['subject']
+                    'body' => $data['body'],
+                    'title' => $data['subject'],
+                    'subject' => $data['subject']
                 ],
                 function ($m) use ($data) {
                     $m->to($data['email'], $data['name'])
-                        ->subject($data['subject']);
+                        ->subject($data['subject'] . ' - ' . date('Y-m-d'));
                     $m->from(env('MAIL_FROM_ADDRESS'), $data['subject']);
                 }
             );
         } catch (\Throwable $th) {
-            $msg = 'failed';
-            throw $th;
+            throw new Exception($th->getMessage());
         }
     }
-
 
 
     public static function get_stripe()
