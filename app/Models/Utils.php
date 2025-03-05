@@ -35,9 +35,13 @@ class Utils extends Model
                     'subject' => $data['subject']
                 ],
                 function ($m) use ($data) {
-                    $m->to($data['email'], $data['name'])
-                        ->subject($data['subject'] . ' - ' . date('Y-m-d'));
-                    $m->from(env('MAIL_FROM_ADDRESS'), $data['subject']);
+                    if (filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+                        $m->to($data['email'], $data['name'])
+                            ->subject($data['subject'] . ' - ' . date('Y-m-d'));
+                        $m->from(env('MAIL_FROM_ADDRESS'), $data['subject']);
+                    } else {
+                        throw new Exception('Invalid email address.');
+                    }
                 }
             );
         } catch (\Throwable $th) {
