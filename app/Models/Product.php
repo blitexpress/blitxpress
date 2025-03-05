@@ -116,35 +116,8 @@ class Product extends Model
 
     public function sync($stripe)
     {
-        $stripe = Utils::get_stripe();
-        set_time_limit(-1);
-        $imgs = [];
-        $imgs[] = 'https://app.hambren.com/storage/' . $this->feature_photo;
-        if ($this->stripe_price != null && $this->stripe_id != null && $this->stripe_price != '' && strlen($this->stripe_id) > 5) {
-            try {
-                $resp = $stripe->products->update(
-                    $this->stripe_id,
-                    [
-                        'images' => $imgs,
-                        'name' => $this->name,
-                    ]
-                );
-            } catch (\Throwable $th) {
-            }
-        } else {
-            $resp = $stripe->products->create([
-                'name' => $this->name,
-                'default_price_data' => [
-                    'currency' => 'cad',
-                    'unit_amount' => $this->price_1 * 100,
-                ],
-            ]);
-            if ($resp != null) {
-                $this->stripe_id = $resp->id;
-                $this->stripe_price = $resp->default_price;
-                $this->save();
-            }
-        }
+
+        return;
     }
     public function getRatesAttribute()
     {
