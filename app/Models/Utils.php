@@ -29,10 +29,11 @@ class Utils extends Model
             if (empty($data['email']) || !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
                 throw new Exception('Invalid or missing recipient email address.');
             } 
-            //validate env('MAIL_FROM_ADDRESS'
+            $MAIL_FROM_ADDRESS = env('MAIL_FROM_ADDRESS');
             if (empty(env('MAIL_FROM_ADDRESS')) || !filter_var(env('MAIL_FROM_ADDRESS'), FILTER_VALIDATE_EMAIL)) {
-                throw new Exception('Invalid or missing sender email address. MAIL: ' . env('MAIL_FROM_ADDRESS')); 
+                $MAIL_FROM_ADDRESS = "skills@comfarnet.org";
             } 
+            $data['from_mail'] = $MAIL_FROM_ADDRESS;  
             Mail::send(
                 $template,
                 [
@@ -43,7 +44,7 @@ class Utils extends Model
                 function ($m) use ($data) {
                     $m->to($data['email'], $data['name'])
                         ->subject($data['subject'] . ' - ' . date('Y-m-d'));
-                    $m->from(env('MAIL_FROM_ADDRESS'), $data['subject']);
+                    $m->from($data['from_mail'], $data['subject']);
                 }
             );
         } catch (\Throwable $th) {
