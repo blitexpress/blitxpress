@@ -539,11 +539,17 @@ class ApiResurceController extends Controller
         }
 
         if (
-            !isset($request->parent_id) ||
-            $request->parent_id == null ||
-            ((int)($request->parent_id)) < 1
+            !isset($request->parent_local_id) ||
+            $request->parent_local_id == null
         ) {
             return $this->error('Local parent ID is missing.');
+        }
+
+        //  strlen($request->parent_local_id) < 6
+        if (
+            strlen($request->parent_local_id) < 6
+        ) {
+            return $this->error('Local parent ID is too short.');
         }
 
 
@@ -571,9 +577,10 @@ class ApiResurceController extends Controller
             $img->src =  $src;
             $img->thumbnail =  null;
             $img->parent_endpoint =  $request->parent_endpoint;
+            $img->parent_local_id =  $request->parent_local_id;
             $img->type =  $request->type;
             $img->parent_id =  (int)($request->parent_id);
-            $pro = Product::where(['local_id' => $img->parent_id])->first();
+            $pro = Product::where(['local_id' => $img->parent_local_id])->first();
             $img->product_id =  null;
             if ($pro != null) {
                 $img->product_id =  $pro->id;
@@ -923,19 +930,11 @@ class ApiResurceController extends Controller
         if (
             !isset($r->local_id) ||
             $r->local_id == null ||
-            ((int)($r->local_id)) < 10
+            strlen($r->local_id) < 6
         ) {
-            return $this->error('Local parent ID is missing.');
+            return $this->error('Local ID is missing.');
         }
-
-        if (
-            !isset($r->id) ||
-            $r->name == null ||
-            ((int)($r->id)) < 1
-        ) {
-            return $this->error('Local parent ID is missing.');
-        }
-
+ 
 
         $isEdit = false;
         if (
@@ -1049,7 +1048,7 @@ class ApiResurceController extends Controller
         $pro->date_added = Carbon::now();
         $pro->date_updated = Carbon::now();
         $imgs = Image::where([
-            'parent_id' => $pro->local_id
+            'parent_local_id' => $pro->local_id
         ])->get();
         if ($imgs->count() > 0) {
             $pro->feature_photo = $imgs[0]->src;
@@ -1341,7 +1340,7 @@ class ApiResurceController extends Controller
     {
         //latest 1000 products without pagination
         $products = Product::where([])->limit(1000)->get();
-        return $this->success($products, 'Success'); 
+        return $this->success($products, 'Success');
     }
     public function products(Request $request)
     {
