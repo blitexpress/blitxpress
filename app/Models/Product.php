@@ -58,60 +58,12 @@ class Product extends Model
         return $value;
     }
 
-    //getter for price_2
-    public function getPrice2Attribute($value)
-    {
-        if ($value == null || $value == 0 || strlen($value) < 1) {
-            $p1 = ((int)($this->price_1));
-            //10 of p1
-            $discount = $p1 * 0.1;
-            $value = $p1 + $discount;
-        }
-        return $value;
-    }
 
 
     public function update_stripe_price($new_price)
     {
 
-        $new_price = null;
-        $stripe = Utils::get_stripe();
-        set_time_limit(-1);
-        try {
-            $new_price = $stripe->prices->create([
-                'currency' => 'cad',
-                'unit_amount' => $this->price_1 * 100,
-                'product' => $this->stripe_id,
-            ]);
-        } catch (\Throwable $th) {
-            throw $th->getMessage();
-        }
-        if ($new_price == null) {
-            throw new \Exception("Error Processing Request", 1);
-        }
-
-        $resp = null;
-        try {
-            $resp = $stripe->products->update(
-                $this->stripe_id,
-                [
-                    'default_price' => $this->stripe_price,
-                    'name' => 'Muhindo mubaraka test',
-                ]
-            );
-        } catch (\Throwable $th) {
-            throw $th->getMessage();
-        }
-        if ($resp == null) {
-            throw new \Exception("Error Processing Request", 1);
-        }
-
-
-        if ($resp->default_price != null) {
-            return $resp->default_price;
-        } else {
-            throw new \Exception("Error Processing Request", 1);
-        }
+        return; 
     }
 
     public function sync($stripe)

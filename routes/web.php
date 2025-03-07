@@ -5,6 +5,7 @@ use App\Http\Controllers\MainController;
 use App\Http\Middleware\Authenticate;
 use App\Http\Middleware\RedirectIfAuthenticated;
 use App\Models\Gen;
+use App\Models\Order;
 use App\Models\Utils;
 use Carbon\Carbon;
 use Dflydev\DotAccessData\Util;
@@ -16,6 +17,13 @@ use Illuminate\Support\Facades\Route;
 
 
 Route::get('mail-test', function () {
+
+    $lastOrder = Order::orderBy('id', 'desc')->first();
+    $lastOrder->order_state = 0;
+    $lastOrder->stripe_url .= '1';
+    $lastOrder->save();
+    die('mail-test');
+    Order::send_mails($lastOrder);
 
     $data['body'] = 'This should be the body of the <b>email</b>.';
     $data['data'] = $data['body'];

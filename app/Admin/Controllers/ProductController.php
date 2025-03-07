@@ -36,18 +36,15 @@ class ProductController extends AdminController
 
         $grid->quickSearch('name')->placeholder('Search by name');
 
-
-
         $grid->filter(function ($filter) {
             $filter->disableIdFilter();
-            $filter->like('name', 'Name');
+            $filter->like('name', 'Product Name');
             $cats = \App\Models\ProductCategory::all();
             $filter->equal('category', 'Category')->select(
                 $cats->pluck('category', 'id')
             );
-
-            $filter->between('price_1', 'Select Price');
-            $filter->between('created_at', 'Created at')->datetime();
+            $filter->between('price_1', 'Selling Price (UGX)');
+            $filter->between('created_at', 'Created Date')->datetime();
         });
         $grid->model()->orderBy('id', 'desc');
 
@@ -55,36 +52,30 @@ class ProductController extends AdminController
             ->image('', 50, 50)
             ->sortable();
 
-        $grid->column('id', __('Id'))->sortable();
-        $grid->column('name', __('Name'))->sortable()
+        $grid->column('id', __('ID'))->sortable();
+        $grid->column('name', __('Product Name'))->sortable()
             ->editable();
         $grid->column('description', __('Description'))
             ->hide();
 
-        $grid->column('price_2', __('Original Price'))
+        $grid->column('price_2', __('Original Price (UGX)'))
             ->sortable()
             ->editable();
-        $grid->column('price_1', __('Selling Price'))
+        $grid->column('price_1', __('Selling Price (UGX)'))
             ->sortable()
             ->editable();
 
-        $grid->column('date_updated', __('Date updated'));
+        $grid->column('date_updated', __('Last Updated'));
         $grid->column('user', __('User'))
             ->display(function ($user) {
-                $u =  \App\Models\User::find($user);
-                if ($u == null) {
-                    return 'Deleted';
-                }
-                return $u->name;
+                $u = \App\Models\User::find($user);
+                return $u ? $u->name : 'Deleted';
             })
             ->sortable();
         $grid->column('category', __('Category'))
             ->display(function ($category) {
-                $c =  \App\Models\ProductCategory::find($category);
-                if ($c == null) {
-                    return 'Deleted';
-                }
-                return $c->category;
+                $c = \App\Models\ProductCategory::find($category);
+                return $c ? $c->category : 'Deleted';
             })
             ->sortable();
 
@@ -92,6 +83,7 @@ class ProductController extends AdminController
             ->display(function ($created_at) {
                 return date('Y-m-d H:i:s', strtotime($created_at));
             })->sortable();
+
         return $grid;
     }
 
@@ -105,30 +97,33 @@ class ProductController extends AdminController
     {
         $show = new Show(Product::findOrFail($id));
 
-        $show->field('id', __('Id'));
-        $show->field('name', __('Name'));
+        $show->field('id', __('ID'));
+        $show->field('name', __('Product Name'));
         $show->field('metric', __('Metric'));
-        $show->field('currency', __('Currency'));
+        // The currency is fixed to UGX.
+        $show->field('currency', __('Currency'))->as(function () {
+            return 'UGX';
+        });
         $show->field('description', __('Description'));
         $show->field('summary', __('Summary'));
-        $show->field('price_1', __('Price 1'));
-        $show->field('price_2', __('Price 2'));
-        $show->field('feature_photo', __('Feature photo'));
+        $show->field('price_1', __('Selling Price (UGX)'));
+        $show->field('price_2', __('Original Price (UGX)'));
+        $show->field('feature_photo', __('Feature Photo'));
         $show->field('rates', __('Rates'));
-        $show->field('date_added', __('Date added'));
-        $show->field('date_updated', __('Date updated'));
+        $show->field('date_added', __('Date Added'));
+        $show->field('date_updated', __('Last Updated'));
         $show->field('user', __('User'));
         $show->field('category', __('Category'));
-        $show->field('sub_category', __('Sub category'));
+        $show->field('sub_category', __('Sub Category'));
         $show->field('supplier', __('Supplier'));
-        $show->field('url', __('Url'));
+        $show->field('url', __('URL'));
         $show->field('status', __('Status'));
-        $show->field('in_stock', __('In stock'));
+        $show->field('in_stock', __('In Stock'));
         $show->field('keywords', __('Keywords'));
-        $show->field('p_type', __('P type'));
-        $show->field('local_id', __('Local id'));
-        $show->field('updated_at', __('Updated at'));
-        $show->field('created_at', __('Created at'));
+        $show->field('p_type', __('Product Type'));
+        $show->field('local_id', __('Local ID'));
+        $show->field('updated_at', __('Updated At'));
+        $show->field('created_at', __('Created At'));
         $show->field('data', __('Data'));
 
         return $show;
@@ -145,22 +140,23 @@ class ProductController extends AdminController
         $last->create_thumbail();
         $form = new Form(new Product());
 
-
-
-        $form->text('name', __('Name'))
+        $form->text('name', __('Product Name'))
             ->rules('required');
 
-        $form->text('price_2', __('Original Price'))
+        // Ensure the currency is set to UGX only.
+        $form->hidden('currency')->default('UGX');
+
+        $form->text('price_2', __('Original Price (UGX)'))
             ->rules('required');
-        $form->text('price_1', __('Selling Price'))
+        $form->text('price_1', __('Selling Price (UGX)'))
             ->rules('required');
 
-        $form->radio('has_colors', __('Has colors?'))
+        $form->radio('has_colors', __('Does it have color options?'))
             ->options([
                 'Yes' => 'Yes',
                 'No' => 'No'
             ])->when('Yes', function (Form $form) {
-                //list of primary colors
+                // List of common colors.
                 $colors = [
                     'Red' => 'Red',
                     'Blue' => 'Blue',
@@ -188,18 +184,17 @@ class ProductController extends AdminController
                     'DarkGray' => 'DarkGray',
                     'DarkGreen' => 'DarkGreen',
                 ];
-                $form->tags('colors', 'Select colors')
+                $form->tags('colors', 'Select Colors')
                     ->options($colors)
                     ->rules('required');
             })->default('No');
 
-        //has_sizes
-        $form->radio('has_sizes', __('Has sizes?'))
+        $form->radio('has_sizes', __('Does it have size options?'))
             ->options([
                 'Yes' => 'Yes',
                 'No' => 'No'
             ])->when('Yes', function (Form $form) {
-                //list of primary colors
+                // List of common sizes.
                 $sizes = [
                     'XS' => 'XS',
                     'S' => 'S',
@@ -211,7 +206,7 @@ class ProductController extends AdminController
                     'XXXXL' => 'XXXXL',
                     'XXXXXL' => 'XXXXXL',
                 ];
-                $form->tags('sizes', 'Select sizes')
+                $form->tags('sizes', 'Select Sizes')
                     ->options($sizes)
                     ->rules('required');
             })->default('No');
@@ -219,34 +214,23 @@ class ProductController extends AdminController
         $form->quill('description', __('Description'))
             ->rules('required');
 
-        $form->image('feature_photo', __('Feature photo'))
+        $form->image('feature_photo', __('Feature Photo'))
             ->rules('required');
         $cats = \App\Models\ProductCategory::all();
         $form->select('category', __('Category'))
-            ->options(
-                $cats->pluck('category', 'id')
-            )
+            ->options($cats->pluck('category', 'id'))
             ->rules('required');
-        /* $form->url('url', __('Url')); 
-                $form->decimal('rates', __('Rates'));
-        */
-        // $form->keyValue('summary', __('Data'));
 
-        $vendors = User::where([
-            'status' => 'Active'
-        ])->get()->pluck('name', 'id');
+        // Uncomment and adjust if needed:
+        // $form->url('url', __('URL'));
+        // $form->decimal('rates', __('Rates'));
 
-        $u = Auth::user();
-        $form->select('user', __('Supplier'))
-        ->options($vendors);
-
-        //has many images
+        // has many images
         $form->hasMany('images', 'Images', function (Form\NestedForm $form) {
             $u = Auth::user();
             $form->image('src', 'Image')->uniqueName();
             $form->hidden('administrator_id')->value($u->id);
         });
-
 
         return $form;
     }

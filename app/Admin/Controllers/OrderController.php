@@ -28,22 +28,22 @@ class OrderController extends AdminController
     protected function grid()
     {
         $grid = new Grid(new Order());
-        $grid->model()->orderBy('id', 'desc'); 
+        $grid->model()->orderBy('id', 'desc');
         $grid->quickSearch('customer_name')->placeholder('Search by customer name');
-        $grid->column('id', __('Id'))->sortable();
-        //$grid->disableBatchActions();
+
+        $grid->column('id', __('ID'))->sortable();
+
         $grid->column('created_at', __('Created'))
             ->display(function ($created_at) {
                 return Utils::my_date_time($created_at);
             })->sortable();
+
         $grid->column('user', __('User'))
             ->display(function ($user) {
                 $u = User::find($user);
-                if ($u == null) {
-                    return "Unknown";
-                }
-                return $u->name;
+                return $u ? $u->name : "Unknown";
             })->sortable()->hide();
+
         $grid->column('order_state', __('Order State'))
             ->sortable()
             ->display(function ($x) {
@@ -54,9 +54,7 @@ class OrderController extends AdminController
                     $badge_color = "info";
                 } else if ($x == 3) {
                     $badge_color = "success";
-                } else if ($x == 4) {
-                    $badge_color = "danger";
-                } else if ($x == 5) {
+                } else if ($x == 4 || $x == 5) {
                     $badge_color = "danger";
                 }
                 $text = 'Pending';
@@ -66,58 +64,58 @@ class OrderController extends AdminController
                     $text = 'Processing';
                 } else if ($x == 2) {
                     $text = 'Completed';
-                } else  if ($x == 3) {
+                } else if ($x == 3) {
                     $text = 'Canceled';
                 } else {
                     $text = 'Failed';
                 }
                 return "<span class='badge bg-$badge_color'>$text</span>";
             });
+
         $grid->column('amount', __('Amount'))
             ->display(function ($amount) {
-                return 'CA$' . number_format($amount);
+                return 'UGX ' . number_format($amount);
             })->sortable();
+
         $grid->column('payment_confirmation', __('Payment'))
             ->display(function ($payment_confirmation) {
-                if ($payment_confirmation == null || $payment_confirmation == "") {
-                    return "Not Paid";
-                }
-                return $payment_confirmation;
+                return empty($payment_confirmation) ? "Not Paid" : $payment_confirmation;
             })->sortable();
-        $grid->column('mail', __('Mail'))->sortable()
-            ->hide();
+
+        $grid->column('mail', __('Mail'))->sortable()->hide();
+
         $grid->column('delivery_district', __('Delivery'))
             ->display(function ($delivery_district) {
                 $delivery_district = DeliveryAddress::find($delivery_district);
-                if ($delivery_district == null) {
-                    return "Unknown";
-                }
-                return $delivery_district->address;
+                return $delivery_district ? $delivery_district->address : "Unknown";
             })->sortable();
+
         $grid->column('description', __('Description'))->hide();
         $grid->column('customer_name', __('Customer'))->sortable();
         $grid->column('customer_phone_number_1', __('Customer Contact'));
-        $grid->column('customer_phone_number_2', __('Customer phone number 2'))->hide();
-        $grid->column('customer_address', __('Customer address'));
+        $grid->column('customer_phone_number_2', __('Alternate Contact'))->hide();
+        $grid->column('customer_address', __('Customer Address'));
+
         $grid->column('order_total', __('Total'))
             ->display(function ($order_total) {
-                return 'R ' . number_format($order_total);
+                return 'UGX ' . number_format($order_total);
             })->sortable()->hide();
-        /* actions, view order details and update order */
+
+        // Action buttons for viewing and updating orders.
         $grid->column('view', __('View'))
             ->display(function () {
                 $order = Order::find($this->id);
                 $link = admin_url('orders/' . $order->id);
-                $link = "<a href='$link' class='btn btn-info btn-sm'>View</a>";
-                return $link;
+                return "<a href='$link' class='btn btn-info btn-sm'>View</a>";
             });
+
         $grid->column('update', __('Update'))
             ->display(function () {
                 $order = Order::find($this->id);
                 $link = admin_url('orders/' . $order->id . '/edit');
-                $link = "<a href='$link' class='btn btn-warning btn-sm'>Update</a>";
-                return $link;
+                return "<a href='$link' class='btn btn-warning btn-sm'>Update</a>";
             });
+
         return $grid;
     }
 
@@ -129,40 +127,47 @@ class OrderController extends AdminController
      */
     protected function detail($id)
     {
-        $show = new Show(Order::findOrFail($id));
-        $o = Order::find($id);
-        return view('order', ['order' => $o]);
-        return;
+        $order = Order::findOrFail($id);
+        // Display custom view for order details.
+        return view('order', ['order' => $order]);
 
-        $show->field('id', __('Id'));
-        $show->field('created_at', __('Created at'));
-        $show->field('updated_at', __('Updated at'));
+        // If using the built-in Show, uncomment below:
+        /*
+        $show = new Show($order);
+        $show->field('id', __('ID'));
+        $show->field('created_at', __('Created At'));
+        $show->field('updated_at', __('Updated At'));
         $show->field('user', __('User'));
-        $show->field('order_state', __('Order state'));
-        $show->field('amount', __('Amount'));
-        $show->field('date_created', __('Date created'));
-        $show->field('payment_confirmation', __('Payment confirmation'));
-        $show->field('date_updated', __('Date updated'));
+        $show->field('order_state', __('Order State'));
+        $show->field('amount', __('Amount'))->as(function ($amount) {
+            return 'UGX ' . number_format($amount);
+        });
+        $show->field('payment_confirmation', __('Payment Confirmation'));
         $show->field('mail', __('Mail'));
-        $show->field('delivery_district', __('Delivery district'));
-        $show->field('temporary_id', __('Temporary id'));
+        $show->field('delivery_district', __('Delivery District'));
         $show->field('description', __('Description'));
-        $show->field('customer_name', __('Customer name'));
-        $show->field('customer_phone_number_1', __('Customer phone number 1'));
-        $show->field('customer_phone_number_2', __('Customer phone number 2'));
-        $show->field('customer_address', __('Customer address'));
-        $show->field('order_total', __('Order total'));
-        $show->field('order_details', __('Order details'));
-        $show->field('stripe_id', __('Stripe id'));
-        $show->field('stripe_url', __('Stripe url'));
-        $show->field('stripe_paid', __('Stripe paid'));
-        $show->field('delivery_method', __('Delivery method'));
-        $show->field('delivery_address_id', __('Delivery address id'));
-        $show->field('delivery_address_details', __('Delivery address details'));
-        $show->field('delivery_amount', __('Delivery amount'));
-        $show->field('payable_amount', __('Payable amount'));
-
+        $show->field('customer_name', __('Customer Name'));
+        $show->field('customer_phone_number_1', __('Customer Phone Number 1'));
+        $show->field('customer_phone_number_2', __('Customer Phone Number 2'));
+        $show->field('customer_address', __('Customer Address'));
+        $show->field('order_total', __('Order Total'))->as(function ($order_total) {
+            return 'UGX ' . number_format($order_total);
+        });
+        $show->field('order_details', __('Order Details'));
+        $show->field('stripe_id', __('Stripe ID'));
+        $show->field('stripe_url', __('Stripe URL'));
+        $show->field('stripe_paid', __('Stripe Paid'));
+        $show->field('delivery_method', __('Delivery Method'));
+        $show->field('delivery_address_id', __('Delivery Address ID'));
+        $show->field('delivery_address_details', __('Delivery Address Details'));
+        $show->field('delivery_amount', __('Delivery Amount'))->as(function ($delivery_amount) {
+            return 'UGX ' . number_format($delivery_amount);
+        });
+        $show->field('payable_amount', __('Payable Amount'))->as(function ($payable_amount) {
+            return 'UGX ' . number_format($payable_amount);
+        });
         return $show;
+        */
     }
 
     /**
@@ -173,19 +178,10 @@ class OrderController extends AdminController
     protected function form()
     {
         $form = new Form(new Order());
-        //display
-        $form->display('id', __('Id'));
-        /*  $order_state = "Pending";
-        if ($this->status == 1) {
-            $status = "Processing";
-        } else if ($this->status == 2) {
-            $status = "Completed";
-        } else if ($this->status == 3) {
-            $status = "Canceled";
-        } else if ($this->status == 4) {
-            $status = "Failed";
-        } */
-        $form->radio('order_state', __('Order state'))
+
+        $form->display('id', __('ID'));
+
+        $form->radio('order_state', __('Order State'))
             ->options([
                 0 => 'Pending',
                 1 => 'Processing',

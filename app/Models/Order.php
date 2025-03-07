@@ -16,11 +16,22 @@ class Order extends Model
         //created
         self::created(function ($m) {
             try {
-                $m->create_payment_link();
+                self::send_mails($m);
             } catch (\Throwable $th) {
                 //throw $th;
             }
         });
+
+        //updated
+        self::updated(function ($m) {
+            try {
+                self::send_mails($m);
+            } catch (\Throwable $th) {
+                //throw $th;
+            }
+        });
+
+
         self::deleting(function ($m) {
             try {
                 $items = OrderedItem::where('order', $m->id)->get();
@@ -31,6 +42,68 @@ class Order extends Model
                 //throw $th;
             }
         });
+    }
+
+
+    public static function send_mails($m)
+    {
+        $customer = User::find($m->user);
+        if ($customer == null) {
+            return;
+        }
+        $mail_body_admin = "";
+        $mail_body_customer = "";
+
+        $review_url = admin_url('orders/' . $m->id . '/edit');
+        if ($m->order_state == 0) {
+            $mail_body_admin = <<<EOD
+        Dear Administrator, <br>
+        A new order has been received. <br>
+        Order ID: <b>#{$m->id}</b><br>
+        Order Status: Pending <br>
+        Total Amount: {$m->total} <br>
+        Please review the order by clicking <a href="$review_url">here</a>. <br>
+        <br>
+        Please do not reply to this email. <br>
+        EOD;
+
+            $mail_body_customer = <<<EOD
+        Dear Customer, <br>
+        Thank you for your order. <br>
+        Order ID: <b>#{$m->id}</b><br>
+        Order Status: Pending <br>
+        Total Amount: {$m->total} <br>
+        we will notify you when your order is processed. <br>
+        <br>
+        Please do not reply to this email. <br>
+        EOD;
+        }
+
+
+        echo $mail_body_admin;
+        die();
+
+
+        /* 
+        $form->radio('order_state', __('Order State'))
+        ->options([
+            0 => 'Pending',
+            1 => 'Processing',
+            2 => 'Completed',
+            3 => 'Canceled',
+            4 => 'Failed',
+        ]);    
+        Schema::table('orders', function (Blueprint $table) {
+            $table->string('pending_mail_sent')->default('No')->nullable();
+            $table->string('processing_mail_sent')->default('No')->nullable();
+            $table->string('completed_mail_sent')->default('No')->nullable();
+            $table->string('canceled_mail_sent')->default('No')->nullable();
+            $table->string('failed_mail_sent')->default('No')->nullable();
+            $table->bigInteger('sub_total')->default(0)->nullable();
+            $table->bigInteger('tax')->default(0)->nullable();
+            $table->bigInteger('discount')->default(0)->nullable();
+            $table->bigInteger('delivery_fee')->default(0)->nullable();
+        });*/
     }
 
     public function create_payment_link()
