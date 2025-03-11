@@ -19,8 +19,7 @@ return [
 
     'allowed_methods' => ['*'],  // Allows all HTTP methods
 
-    'allowed_origins' => [
-        'http://localhost:5173',
+    'allowed_origins' => [ 
         'https://blitxpress.com',
         'http://blitxpress.com',
         'https://www.blitxpress.com',
