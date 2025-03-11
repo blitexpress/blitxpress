@@ -19,7 +19,13 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['http://localhost:5173'],
+    'allowed_origins' => [
+        'http://localhost:5173',
+        'https://blitxpress.com',
+        'https://www.blitxpress.com',
+        'www.blitxpress.com',
+        'blitxpress.com',
+    ],
 
     'allowed_origins_patterns' => [],
 
