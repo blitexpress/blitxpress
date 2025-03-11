@@ -22,6 +22,7 @@ return [
     'allowed_origins' => [
         'http://localhost:5173',
         'https://blitxpress.com',
+        'http://blitxpress.com',
         'https://www.blitxpress.com',
         'www.blitxpress.com',
         'blitxpress.com',
