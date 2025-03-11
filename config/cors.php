@@ -17,25 +17,24 @@ return [
 
     'paths' => ['api/*', 'sanctum/csrf-cookie'],
 
-    'allowed_methods' => ['*'],
+    'allowed_methods' => ['*'],  // Allows all HTTP methods
 
     'allowed_origins' => [
         'http://localhost:5173',
         'https://blitxpress.com',
         'http://blitxpress.com',
         'https://www.blitxpress.com',
-        'www.blitxpress.com',
-        'blitxpress.com',
+        'http://www.blitxpress.com',
+        '*.blitxpress.com',  // Allows all subdomains
     ],
 
-    'allowed_origins_patterns' => [],
+    'allowed_origins_patterns' => ['/^https?:\/\/(.+\.)?blitxpress\.com$/'], // Regex pattern for dynamic subdomains
 
-    'allowed_headers' => ['*'],
+    'allowed_headers' => ['*'],  // Allows all headers
 
     'exposed_headers' => [],
 
     'max_age' => 0,
 
-    'supports_credentials' => false,
-
+    'supports_credentials' => true,  // Enable if using cookies or authentication with API
 ];
