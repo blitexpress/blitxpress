@@ -85,11 +85,8 @@ Route::get('test', function () {
 
 
 
-Route::get('migrate', function () {
-    // Artisan::call('migrate');
-    //do run laravel migration command
-    Artisan::call('migrate', ['--force' => true]);
-    //returning the output
+Route::get('migrate', function () { 
+    Artisan::call('migrate', ['--force' => true]); 
     return Artisan::output();
 });
 
