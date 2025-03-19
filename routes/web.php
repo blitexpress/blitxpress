@@ -283,7 +283,7 @@ Route::get('/process', function () {
 Route::get('/sync', function () {
     Utils::sync_products();
     Utils::sync_orders();
-})->name("gen");
+})->name("sync");
 Route::get('/gen', function () {
     die(Gen::find($_GET['id'])->do_get());
 })->name("gen");
