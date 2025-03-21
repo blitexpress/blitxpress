@@ -47,6 +47,7 @@ class Order extends Model
 
     public static function send_mails($m)
     {
+        return;
         $customer = User::find($m->user);
         if ($customer == null) {
             return;
