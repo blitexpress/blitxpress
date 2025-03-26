@@ -5,6 +5,7 @@ namespace App\Admin\Controllers;
 use App\Models\Image;
 use App\Models\Product;
 use App\Models\User;
+use App\Models\Utils;
 use Encore\Admin\Controllers\AdminController;
 use Encore\Admin\Form;
 use Encore\Admin\Grid;
@@ -139,6 +140,7 @@ class ProductController extends AdminController
         $last = Image::where([])->get()->last();
         $last->create_thumbail();
         $form = new Form(new Product());
+        $form->hidden('local_id')->value(Utils::get_unique_text());  
 
         $form->text('name', __('Product Name'))
             ->rules('required');
