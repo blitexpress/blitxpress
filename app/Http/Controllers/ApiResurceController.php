@@ -1345,7 +1345,7 @@ class ApiResurceController extends Controller
     public function products(Request $request)
     {
         // Start building the query on active products
-        $query = Product::where('status', '1');
+        $query = Product::where([]);
 
         // Filter by search keyword (in the name or description)
         if ($request->filled('search')) {
