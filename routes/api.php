@@ -45,13 +45,22 @@ Route::post('chat-mark-as-read', [ApiResurceController::class, 'chat_mark_as_rea
 Route::get('chat-heads', [ApiResurceController::class, 'chat_heads']);
 Route::get('chat-messages', [ApiResurceController::class, 'chat_messages']);
 Route::get("users/me", [ApiResurceController::class, "my_profile"]);
+Route::get("manifest", [ApiResurceController::class, "manifest"]);
+Route::get("live-search", [ApiResurceController::class, "live_search"]);
+Route::get("search-history", [ApiResurceController::class, "search_history"]);
+Route::post("search-history/clear", [ApiResurceController::class, "clear_search_history"]);
 Route::POST("users/login", [ApiAuthController::class, "login"]);
 Route::POST("users/register", [ApiAuthController::class, "register"]);
+
+// Wishlist routes
+Route::get('wishlist_get', [ApiResurceController::class, 'wishlist_get']);
+Route::post('wishlist_add', [ApiResurceController::class, 'wishlist_add']);
+Route::post('wishlist_remove', [ApiResurceController::class, 'wishlist_remove']);
+Route::post('wishlist_check', [ApiResurceController::class, 'wishlist_check']);
+
 Route::get('api/{model}', [ApiResurceController::class, 'index']);
 
-
-
-Route::get('manifest', [ApiAuthController::class, 'manifest']);
+// Route::get('manifest', [ApiAuthController::class, 'manifest']); // Commented out - using ApiResurceController instead
 
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {

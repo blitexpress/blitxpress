@@ -89,4 +89,20 @@ class User extends Authenticatable implements JWTSubject
     {
         return $this->hasMany(UserHasProgram::class, 'user_id');
     }
+
+    /**
+     * Get the user's wishlist items.
+     */
+    public function wishlists()
+    {
+        return $this->hasMany(Wishlist::class);
+    }
+
+    /**
+     * Get the user's wishlist products.
+     */
+    public function wishlistProducts()
+    {
+        return $this->hasManyThrough(Product::class, Wishlist::class, 'user_id', 'id', 'id', 'product_id');
+    }
 }

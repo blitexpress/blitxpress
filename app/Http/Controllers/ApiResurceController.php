@@ -23,6 +23,7 @@ use App\Models\OrderedItem;
 use App\Models\Person;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Models\SearchHistory;
 use App\Models\ServiceProvider;
 use App\Models\User;
 use App\Models\Utils;
@@ -1347,12 +1348,15 @@ class ApiResurceController extends Controller
         // Start building the query on active products
         $query = Product::where([]);
 
+        $searchTerm = null;
+        $productIds = [];
+
         // Filter by search keyword (in the name or description)
         if ($request->filled('search')) {
-            $search = $request->input('search');
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'LIKE', "%{$search}%")
-                    ->orWhere('description', 'LIKE', "%{$search}%");
+            $searchTerm = $request->input('search');
+            $query->where(function ($q) use ($searchTerm) {
+                $q->where('name', 'LIKE', "%{$searchTerm}%")
+                    ->orWhere('description', 'LIKE', "%{$searchTerm}%");
             });
         }
         if ($request->filled('name')) {
@@ -1405,242 +1409,148 @@ class ApiResurceController extends Controller
         $perPage = $request->input('per_page', 28);
         $products = $query->paginate($perPage);
 
+        // Record search history if there was a search term
+        if ($searchTerm && !empty(trim($searchTerm))) {
+            $productIds = $products->pluck('id')->toArray();
+            $resultsCount = $products->total();
+            
+            // Get user ID if authenticated
+            $userId = null;
+            $user = auth('api')->user();
+            if (!$user && $request->filled('user')) {
+                $userId = $request->input('user');
+            } elseif ($user) {
+                $userId = $user->id;
+            }
+            
+            // Get session ID for guest users
+            $sessionId = $request->input('session_id', $request->header('X-Session-ID', session()->getId()));
+            
+            // Record the search
+            SearchHistory::recordSearch($searchTerm, $productIds, $resultsCount, $userId, $sessionId);
+        }
+
         return $this->success($products, 'Success');
     }
 
-    public function categories()
+    /**
+     * Live search endpoint for real-time product search with suggestions
+     */
+    public function live_search(Request $request)
     {
-        $cats = [];
-        foreach (
-            ProductCategory::where([])
-                ->orderby('id', 'desc')
-                ->get() as $key => $cat
-        ) {
-            $cat->parent_text = $cat->category_text;
-            $cats[] = $cat;
+        $searchTerm = $request->input('q', '');
+        $limit = $request->input('limit', 10);
+        
+        if (empty(trim($searchTerm)) || strlen(trim($searchTerm)) < 2) {
+            return $this->success([
+                'products' => [],
+                'suggestions' => [],
+                'total' => 0
+            ], 'Search term too short');
         }
 
-        return $this->success($cats, 'Success');
+        // Search products
+        $products = Product::where(function ($query) use ($searchTerm) {
+                $query->where('name', 'LIKE', "%{$searchTerm}%")
+                      ->orWhere('description', 'LIKE', "%{$searchTerm}%");
+            })
+            ->limit($limit)
+            ->get(['id', 'name', 'price_1', 'price_2', 'feature_photo', 'category']);
+
+        // Get search suggestions based on product names
+        $suggestions = Product::where('name', 'LIKE', "%{$searchTerm}%")
+            ->distinct()
+            ->limit(5)
+            ->pluck('name')
+            ->map(function ($name) use ($searchTerm) {
+                // Extract relevant keywords from product names
+                $words = explode(' ', strtolower($name));
+                return array_filter($words, function ($word) use ($searchTerm) {
+                    return strlen($word) > 2 && stripos($word, strtolower($searchTerm)) !== false;
+                });
+            })
+            ->flatten()
+            ->unique()
+            ->take(5)
+            ->values();
+
+        // Record the search for search history
+        $userId = null;
+        $user = auth('api')->user();
+        
+        if (!$user && $request->filled('user')) {
+            $userId = $request->input('user');
+        } elseif ($user) {
+            $userId = $user->id;
+        }
+        
+        $sessionId = $request->input('session_id', $request->header('X-Session-ID', session()->getId()));
+        $productIds = $products->pluck('id')->toArray();
+        $resultsCount = $products->count();
+        
+        // Record the search
+        SearchHistory::recordSearch($searchTerm, $productIds, $resultsCount, $userId, $sessionId);
+
+        return $this->success([
+            'products' => $products,
+            'suggestions' => $suggestions,
+            'total' => $products->count(),
+            'search_term' => $searchTerm
+        ], 'Live search results');
     }
 
-    public function events()
+    /**
+     * Get user's recent search history
+     */
+    public function search_history(Request $request)
     {
-        return $this->success(Event::where([])->orderby('id', 'desc')->get(), 'Success');
+        $userId = null;
+        $user = auth('api')->user();
+        
+        if (!$user && $request->filled('user')) {
+            $userId = $request->input('user');
+        } elseif ($user) {
+            $userId = $user->id;
+        }
+        
+        // Get session ID for guest users
+        $sessionId = $request->input('session_id', $request->header('X-Session-ID', session()->getId()));
+        
+        $limit = $request->input('limit', 10);
+        
+        $recentSearches = SearchHistory::getRecentSearches($userId, $sessionId, $limit);
+        
+        return $this->success([
+            'recent_searches' => $recentSearches,
+            'total' => count($recentSearches)
+        ], 'Search history retrieved');
     }
 
-    public function news_posts()
+    /**
+     * Clear user's search history
+     */
+    public function clear_search_history(Request $request)
     {
-        return $this->success(NewsPost::where([])->orderby('id', 'desc')->get(), 'Success');
+        $userId = null;
+        $user = auth('api')->user();
+        
+        if (!$user && $request->filled('user')) {
+            $userId = $request->input('user');
+        } elseif ($user) {
+            $userId = $user->id;
+        }
+        
+        // Get session ID for guest users
+        $sessionId = $request->input('session_id', $request->header('X-Session-ID', session()->getId()));
+        
+        if ($userId) {
+            SearchHistory::where('user_id', $userId)->delete();
+        } elseif ($sessionId) {
+            SearchHistory::where('session_id', $sessionId)->delete();
+        }
+        
+        return $this->success([], 'Search history cleared');
     }
-
-
-    public function chat_messages(Request $r)
-    {
-        $u = auth('api')->user();
-        if ($u == null) {
-            $administrator_id = Utils::get_user_id($r);
-            $u = Administrator::find($administrator_id);
-        }
-        if ($u == null) {
-            return $this->error('User not found.');
-        }
-
-        if (isset($r->chat_head_id) && $r->chat_head_id != null) {
-            $messages = ChatMessage::where([
-                'chat_head_id' => $r->chat_head_id
-            ])->get();
-            return $this->success($messages, 'Success');
-        }
-        $messages = ChatMessage::where([
-            'sender_id' => $u->id
-        ])->orWhere([
-            'receiver_id' => $u->id
-        ])->get();
-        return $this->success($messages, 'Success');
-    }
-
-
-    public function chat_heads(Request $r)
-    {
-        $u = auth('api')->user();
-        if ($u == null) {
-            $administrator_id = Utils::get_user_id($r);
-            $u = Administrator::find($administrator_id);
-        }
-        if ($u == null) {
-            return $this->error('User not found.');
-        }
-        $chat_heads = ChatHead::where([
-            'product_owner_id' => $u->id
-        ])->orWhere([
-            'customer_id' => $u->id
-        ])->get();
-        $chat_heads->append('customer_unread_messages_count');
-        $chat_heads->append('product_owner_unread_messages_count');
-        return $this->success($chat_heads, 'Success');
-    }
-
-    public function chat_mark_as_read(Request $r)
-    {
-        $receiver = Administrator::find($r->receiver_id);
-        if ($receiver == null) {
-            return $this->error('Receiver not found.');
-        }
-        $chat_head = ChatHead::find($r->chat_head_id);
-        if ($chat_head == null) {
-            return $this->error('Chat head not found.');
-        }
-        $messages = ChatMessage::where([
-            'chat_head_id' => $chat_head->id,
-            'receiver_id' => $receiver->id,
-            'status' => 'sent'
-        ])->get();
-        foreach ($messages as $key => $message) {
-            $message->status = 'read';
-            $message->save();
-        }
-        return $this->success($messages, 'Success');
-    }
-    public function chat_send(Request $r)
-    {
-        $sender = auth('api')->user();
-
-        if ($sender == null) {
-            $administrator_id = Utils::get_user_id($r);
-            $sender = Administrator::find($administrator_id);
-        }
-        if ($sender == null) {
-            return $this->error('User not found.');
-        }
-        $receiver = User::find($r->receiver_id);
-        if ($receiver == null) {
-            return $this->error('Receiver not found.');
-        }
-        $pro = Product::find($r->product_id);
-        if ($pro == null) {
-            return $this->error('Product not found.');
-        }
-        $product_owner = null;
-        $customer = null;
-
-        if ($pro->user == $sender->id) {
-            $product_owner = $sender;
-            $customer = $receiver;
-        } else {
-            $product_owner = $receiver;
-            $customer = $sender;
-        }
-
-        $chat_head = ChatHead::where([
-            'product_id' => $pro->id,
-            'product_owner_id' => $product_owner->id,
-            'customer_id' => $customer->id
-        ])->first();
-        if ($chat_head == null) {
-            $chat_head = ChatHead::where([
-                'product_id' => $pro->id,
-                'customer_id' => $product_owner->id,
-                'product_owner_id' => $customer->id
-            ])->first();
-        }
-
-        if ($chat_head == null) {
-            $chat_head = new ChatHead();
-            $chat_head->product_id = $pro->id;
-            $chat_head->product_owner_id = $product_owner->id;
-            $chat_head->customer_id = $customer->id;
-            $chat_head->product_name = $pro->name;
-            $chat_head->product_photo = $pro->feature_photo;
-            $chat_head->product_owner_name = $product_owner->name;
-            $chat_head->product_owner_photo = $product_owner->photo;
-            $chat_head->customer_name = $customer->name;
-            $chat_head->customer_photo = $customer->photo;
-            $chat_head->last_message_body = $r->body;
-            $chat_head->last_message_time = Carbon::now();
-            $chat_head->last_message_status = 'sent';
-            $chat_head->save();
-        }
-        $chat_message = new ChatMessage();
-        $chat_message->chat_head_id = $chat_head->id;
-        $chat_message->sender_id = $sender->id;
-        $chat_message->receiver_id = $receiver->id;
-        $chat_message->sender_name = $sender->name;
-        $chat_message->sender_photo = $sender->photo;
-        $chat_message->receiver_name = $receiver->name;
-        $chat_message->receiver_photo = $receiver->photo;
-        $chat_message->body = $r->body;
-        $chat_message->type = 'text';
-        $chat_message->status = 'sent';
-        $chat_message->save();
-        $chat_head->last_message_body = $r->body;
-        $chat_head->last_message_time = Carbon::now();
-        $chat_head->last_message_status = 'sent';
-        $chat_head->save();
-        return $this->success($chat_message, 'Success');
-    }
-
-    public function chat_start(Request $r)
-    {
-        $sender = null;
-        if ($sender == null) {
-            $administrator_id = Utils::get_user_id($r);
-            $sender = Administrator::find($administrator_id);
-        }
-        if ($sender == null) {
-            return $this->error('User not found.');
-        }
-        $receiver = User::find($r->receiver_id);
-        if ($receiver == null) {
-            return $this->error('Receiver not found.');
-        }
-        $pro = Product::find($r->product_id);
-        if ($pro == null) {
-            return $this->error('Product not found.');
-        }
-        $product_owner = null;
-        $customer = null;
-
-        if ($pro->user == $sender->id) {
-            $product_owner = $sender;
-            $customer = $receiver;
-        } else {
-            $product_owner = $receiver;
-            $customer = $sender;
-        }
-
-        $chat_head = ChatHead::where([
-            'product_id' => $pro->id,
-            'product_owner_id' => $product_owner->id,
-            'customer_id' => $customer->id
-        ])->first();
-        if ($chat_head == null) {
-            $chat_head = ChatHead::where([
-                'product_id' => $pro->id,
-                'customer_id' => $product_owner->id,
-                'product_owner_id' => $customer->id
-            ])->first();
-        }
-
-        if ($chat_head == null) {
-            $chat_head = new ChatHead();
-            $chat_head->product_id = $pro->id;
-            $chat_head->product_owner_id = $product_owner->id;
-            $chat_head->customer_id = $customer->id;
-            $chat_head->product_name = $pro->name;
-            $chat_head->product_photo = $pro->feature_photo;
-            $chat_head->product_owner_name = $product_owner->name;
-            $chat_head->product_owner_photo = $product_owner->photo;
-            $chat_head->customer_name = $customer->name;
-            $chat_head->customer_photo = $customer->photo;
-            $chat_head->last_message_body = '';
-            $chat_head->last_message_time = Carbon::now();
-            $chat_head->last_message_status = 'sent';
-            $chat_head->save();
-        }
-
-        return $this->success($chat_head, 'Success');
-    }
-
 
     public function index(Request $r, $model)
     {
@@ -1829,5 +1739,334 @@ class ApiResurceController extends Controller
             $message = "Sussesfully",
             200
         );
+    }
+
+    // ===== WISHLIST METHODS =====
+
+    /**
+     * Get user's wishlist
+     */
+    public function wishlist_get(Request $request)
+    {
+        try {
+            $user_id = $request->user;
+            
+            if (!$user_id) {
+                return $this->error('User authentication required.', 401);
+            }
+
+            $wishlists = \App\Models\Wishlist::where('user_id', $user_id)
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            return $this->success($wishlists, 'Wishlist retrieved successfully.', 200);
+
+        } catch (\Exception $e) {
+            return $this->error('Failed to retrieve wishlist: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Add product to wishlist
+     */
+    public function wishlist_add(Request $request)
+    {
+        try {
+            $user_id = $request->user;
+            $product_id = $request->product_id;
+
+            if (!$user_id) {
+                return $this->error('User authentication required.', 401);
+            }
+
+            if (!$product_id) {
+                return $this->error('Product ID is required.', 400);
+            }
+
+            // Check if product exists
+            $product = Product::find($product_id);
+            if (!$product) {
+                return $this->error('Product not found.', 404);
+            }
+
+            // Check if already in wishlist
+            $existing = \App\Models\Wishlist::where([
+                'user_id' => $user_id,
+                'product_id' => $product_id
+            ])->first();
+
+            if ($existing) {
+                return $this->error('Product already in wishlist.', 409);
+            }
+
+            // Add to wishlist
+            $wishlist = \App\Models\Wishlist::create([
+                'user_id' => $user_id,
+                'product_id' => $product_id,
+                'product_name' => $product->name,
+                'product_price' => $product->price_1,
+                'product_sale_price' => $product->price_2,
+                'product_photo' => $product->feature_photo,
+            ]);
+
+            return $this->success($wishlist, 'Product added to wishlist successfully.', 201);
+
+        } catch (\Exception $e) {
+            return $this->error('Failed to add to wishlist: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Remove product from wishlist
+     */
+    public function wishlist_remove(Request $request)
+    {
+        try {
+            $user_id = $request->user;
+            $product_id = $request->product_id;
+
+            if (!$user_id) {
+                return $this->error('User authentication required.', 401);
+            }
+
+            if (!$product_id) {
+                return $this->error('Product ID is required.', 400);
+            }
+
+            $wishlist = \App\Models\Wishlist::where([
+                'user_id' => $user_id,
+                'product_id' => $product_id
+            ])->first();
+
+            if (!$wishlist) {
+                return $this->error('Product not found in wishlist.', 404);
+            }
+
+            $wishlist->delete();
+
+            return $this->success(null, 'Product removed from wishlist successfully.', 200);
+
+        } catch (\Exception $e) {
+            return $this->error('Failed to remove from wishlist: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Check if product is in user's wishlist
+     */
+    public function wishlist_check(Request $request)
+    {
+        try {
+            $user_id = $request->user;
+            $product_id = $request->product_id;
+
+            if (!$user_id) {
+                return $this->error('User authentication required.', 401);
+            }
+
+            if (!$product_id) {
+                return $this->error('Product ID is required.', 400);
+            }
+
+            $exists = \App\Models\Wishlist::where([
+                'user_id' => $user_id,
+                'product_id' => $product_id
+            ])->exists();
+
+            return $this->success(['in_wishlist' => $exists], 'Wishlist status checked.', 200);
+
+        } catch (\Exception $e) {
+            return $this->error('Failed to check wishlist status: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Get application manifest with essential data and counts
+     * This endpoint provides centralized data to avoid multiple API calls
+     * Returns different data based on user authentication status
+     */
+    public function manifest(Request $request)
+    {
+        try {
+            $user_id = $request->user;
+            $user = null;
+            
+            // Check if user is authenticated
+            if ($user_id) {
+                $user = Administrator::find($user_id);
+            }
+
+            // Base manifest data for all users (authenticated and guests)
+            $manifest = [
+                'app_info' => [
+                    'name' => 'BlitXpress',
+                    'version' => '1.0.0',
+                    'api_version' => '1.0',
+                    'maintenance_mode' => false,
+                ],
+                'categories' => $this->getProductCategories(),
+                'delivery_locations' => $this->getDeliveryLocations(),
+                'settings' => [
+                    'currency' => 'UGX',
+                    'currency_symbol' => 'UGX',
+                    'tax_rate' => 0, // No tax for delivery-only
+                    'delivery_fee_varies' => true,
+                    'min_order_amount' => 0,
+                ],
+                'features' => [
+                    'wishlist_enabled' => true,
+                    'reviews_enabled' => true,
+                    'chat_enabled' => true,
+                    'promotions_enabled' => true,
+                ],
+                'counts' => [
+                    'total_products' => Product::count(),
+                    'total_categories' => ProductCategory::count(),
+                    'total_orders' => Order::count(),
+                    'total_users' => Administrator::where('user_type', 'customer')->count(),
+                    'total_vendors' => Administrator::where('user_type', 'Vendor')->count(),
+                    'active_vendors' => Administrator::where('user_type', 'Vendor')->count(),
+                    'total_delivery_locations' => DeliveryAddress::count(),
+                    'active_promotions' => 0, // You can add this if you have promotions table
+                    'wishlist_count' => 0,
+                    'cart_count' => 0,
+                    'notifications_count' => 0,
+                    'unread_messages_count' => 0,
+                    'pending_orders' => Order::where('status', 'pending')->count(),
+                    'completed_orders' => Order::where('status', 'completed')->count(),
+                    'cancelled_orders' => Order::where('status', 'cancelled')->count(),
+                    'processing_orders' => Order::where('status', 'processing')->count(),
+                    'recent_orders_this_week' => Order::where('created_at', '>=', now()->subWeek())->count(),
+                    'orders_today' => Order::whereDate('created_at', today())->count(),
+                    'orders_this_month' => Order::whereMonth('created_at', now()->month)->count(),
+                    'new_users_this_week' => Administrator::where('created_at', '>=', now()->subWeek())->count(),
+                    'new_users_today' => Administrator::whereDate('created_at', today())->count(),
+                    'products_out_of_stock' => Product::where('quantity', '<=', 0)->count(),
+                    'low_stock_products' => Product::where('quantity', '>', 0)->where('quantity', '<=', 10)->count(),
+                    'featured_products_count' => Product::where('rates', '>', 4)->count(),
+                    'total_revenue' => Order::where('status', 'completed')->sum('order_total'),
+                    'revenue_this_month' => Order::where('status', 'completed')
+                        ->whereMonth('created_at', now()->month)
+                        ->sum('order_total'),
+                    'average_order_value' => Order::where('status', 'completed')->avg('order_total') ?: 0,
+                ],
+                'user' => null,
+                'is_authenticated' => false,
+            ];
+
+            // If user is authenticated, add user-specific data
+            if ($user) {
+                $manifest['is_authenticated'] = true;
+                $manifest['user'] = [
+                    'id' => $user->id,
+                    'name' => $user->first_name . ' ' . $user->last_name,
+                    'email' => $user->email,
+                    'phone' => $user->phone_number,
+                    'avatar' => $user->avatar,
+                    'user_type' => $user->user_type,
+                    'status' => $user->status,
+                    'complete_profile' => $user->complete_profile,
+                ];
+
+                // User-specific counts
+                $manifest['counts']['total_orders'] = Order::where('user', $user->id)->count();
+                $manifest['counts']['wishlist_count'] = \App\Models\Wishlist::where('user_id', $user->id)->count();
+                
+                // Cart count would come from session/local storage, so we'll leave it at 0
+                // and let frontend manage this
+                
+                // Notifications count (if you have a notifications system)
+                // $manifest['counts']['notifications_count'] = Notification::where('user_id', $user->id)->where('read', false)->count();
+                
+                // Unread messages count
+                $manifest['counts']['unread_messages_count'] = ChatMessage::where('receiver_id', $user->id)
+                    ->where('status', '!=', 'read')->count();
+
+                // Recent orders (last 5)
+                $manifest['recent_orders'] = Order::where('user', $user->id)
+                    ->orderBy('created_at', 'desc')
+                    ->limit(5)
+                    ->get(['id', 'order_total', 'order_state', 'created_at']);
+
+                // User's delivery addresses (if any)
+                // $manifest['delivery_addresses'] = DeliveryAddress::where('user_id', $user->id)->get();
+            }
+
+            // Get recent search suggestions for the user (authenticated or guest)
+            $userId = $user ? $user->id : null;
+            $sessionId = $request->input('session_id', $request->header('X-Session-ID', session()->getId()));
+            $manifest['recent_search_suggestions'] = SearchHistory::getRecentSearches($userId, $sessionId, 10);
+
+            // Popular/featured products for quick access
+            $manifest['featured_products'] = Product::where('rates', '>', 4)
+                ->orderBy('rates', 'desc')
+                ->limit(8)
+                ->get(['id', 'name', 'price_1', 'price_2', 'feature_photo', 'category']);
+
+            // Recent products
+            $manifest['recent_products'] = Product::orderBy('created_at', 'desc')
+                ->limit(8)
+                ->get(['id', 'name', 'price_1', 'price_2', 'feature_photo', 'category']);
+
+            // Active vendors for quick access
+            $manifest['vendors'] = Administrator::where('user_type', 'Vendor')
+                ->limit(12)
+                ->get(['id', 'first_name', 'last_name', 'business_name', 'email', 'phone_number', 'avatar', 'address'])
+                ->map(function ($vendor) {
+                    return [
+                        'id' => $vendor->id,
+                        'name' => $vendor->business_name ?: ($vendor->first_name . ' ' . $vendor->last_name),
+                        'email' => $vendor->email,
+                        'phone_number' => $vendor->phone_number,
+                        'avatar' => $vendor->avatar,
+                        'address' => $vendor->address,
+                        'profile_photo' => $vendor->avatar, // For compatibility
+                    ];
+                });
+
+            return $this->success($manifest, 'Manifest loaded successfully.', 200);
+
+        } catch (\Exception $e) {
+            return $this->error('Failed to load manifest: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Helper method to get product categories for manifest
+     */
+    private function getProductCategories()
+    {
+        return ProductCategory::orderBy('id', 'desc')
+            ->get(['id', 'category', 'parent_id', 'category_text', 'image', 'banner_image', 'show_in_banner', 'show_in_categories'])
+            ->map(function ($category) {
+                return [
+                    'id' => $category->id,
+                    'category' => $category->category,
+                    'name' => $category->category, // Use category as name
+                    'category_text' => $category->category_text,
+                    'parent_id' => $category->parent_id,
+                    'image' => $category->image,
+                    'banner_image' => $category->banner_image,
+                    'show_in_banner' => $category->show_in_banner ?? 'No',
+                    'show_in_categories' => $category->show_in_categories ?? 'Yes',
+                ];
+            });
+    }
+
+    /**
+     * Helper method to get delivery locations for manifest
+     */
+    private function getDeliveryLocations()
+    {
+        return DeliveryAddress::orderBy('name', 'asc')
+            ->get(['id', 'name', 'shipping_cost', 'details'])
+            ->map(function ($location) {
+                return [
+                    'id' => $location->id,
+                    'name' => $location->name,
+                    'shipping_cost' => $location->shipping_cost,
+                    'details' => $location->details,
+                ];
+            });
     }
 }
