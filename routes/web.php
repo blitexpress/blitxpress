@@ -14,7 +14,10 @@ use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 
-
+// Root route to fix MethodNotAllowedHttpException for GET /
+/* Route::get('/', function () {
+    return response()->json(['message' => 'BlitXpress API is running']);
+}); */
 
 Route::get('mail-test', function () {
 
@@ -291,4 +294,11 @@ Route::get('/gen-form', function () {
     die(Gen::find($_GET['id'])->make_forms());
 })->name("gen-form");
 Route::get('generate-class', [MainController::class, 'generate_class']);
- 
+
+# Admin routes for reviews
+use App\Http\Controllers\Admin\ReviewController;
+Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
+    Route::resource('reviews', ReviewController::class);
+    Route::post('reviews/bulk-delete', [ReviewController::class, 'bulkDelete'])->name('reviews.bulk-delete');
+});
+

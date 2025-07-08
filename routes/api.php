@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::post("account-verification", [ApiResurceController::class, 'account_verification']);
 Route::post("password-change", [ApiResurceController::class, 'password_change']);
-Route::post("update-profile", [ApiResurceController::class, 'update_profile']);
+Route::post("update-profile", [ApiResurceController::class, 'update_profile'])->middleware(EnsureTokenIsValid::class);
 Route::post("delete-account", [ApiResurceController::class, 'delete_profile']);
 Route::post("become-vendor", [ApiResurceController::class, 'become_vendor']);
 Route::post("post-media-upload", [ApiResurceController::class, 'upload_media']);
@@ -44,7 +44,7 @@ Route::post('chat-send', [ApiResurceController::class, 'chat_send']);
 Route::post('chat-mark-as-read', [ApiResurceController::class, 'chat_mark_as_read']);
 Route::get('chat-heads', [ApiResurceController::class, 'chat_heads']);
 Route::get('chat-messages', [ApiResurceController::class, 'chat_messages']);
-Route::get("users/me", [ApiResurceController::class, "my_profile"]);
+Route::get("users/me", [ApiResurceController::class, "my_profile"])->middleware(EnsureTokenIsValid::class);
 Route::get("manifest", [ApiResurceController::class, "manifest"]);
 Route::get("live-search", [ApiResurceController::class, "live_search"]);
 Route::get("search-history", [ApiResurceController::class, "search_history"]);
@@ -57,6 +57,20 @@ Route::get('wishlist_get', [ApiResurceController::class, 'wishlist_get']);
 Route::post('wishlist_add', [ApiResurceController::class, 'wishlist_add']);
 Route::post('wishlist_remove', [ApiResurceController::class, 'wishlist_remove']);
 Route::post('wishlist_check', [ApiResurceController::class, 'wishlist_check']);
+
+// Review routes
+use App\Http\Controllers\Api\ReviewController;
+Route::prefix('reviews')->group(function () {
+    Route::get('/', [ReviewController::class, 'index']); // Get reviews for a product
+    Route::get('/stats', [ReviewController::class, 'stats']); // Get review statistics
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::post('/', [ReviewController::class, 'store']); // Create review
+        Route::get('/user-review', [ReviewController::class, 'userReview']); // Get user's review
+        Route::get('/{review}', [ReviewController::class, 'show']); // Get specific review
+        Route::put('/{review}', [ReviewController::class, 'update']); // Update review
+        Route::delete('/{review}', [ReviewController::class, 'destroy']); // Delete review
+    });
+});
 
 Route::get('api/{model}', [ApiResurceController::class, 'index']);
 

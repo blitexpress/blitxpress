@@ -32,6 +32,7 @@ use Carbon\Carbon;
 use Encore\Admin\Auth\Database\Administrator;
 use Exception;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class ApiResurceController extends Controller
@@ -182,115 +183,120 @@ class ApiResurceController extends Controller
             return $this->error('User not found.');
         }
 
-        if (
-            $request->first_name == null ||
-            strlen($request->first_name) < 2
-        ) {
-            return $this->error('First name is missing.');
-        }
-        //validate all
-        if (
-            $request->last_name == null ||
-            strlen($request->last_name) < 2
-        ) {
-            return $this->error('Last name is missing.');
+        // Log the incoming data for debugging
+        Log::info('Profile update request data:', $request->all());
+
+        // Validate required fields
+        if (empty($request->first_name) || strlen(trim($request->first_name)) < 2) {
+            return $this->error('First name is required and must be at least 2 characters.');
         }
 
-        if (
-            $request->phone_number_1 == null ||
-            strlen($request->phone_number_1) < 5
-        ) {
-            return $this->error('Phone number is requried.');
+        if (empty($request->last_name) || strlen(trim($request->last_name)) < 2) {
+            return $this->error('Last name is required and must be at least 2 characters.');
         }
 
-        $anotherUser = Administrator::where([
-            'phone_number' => $request->phone_number_1
-        ])->first();
+        if (empty($request->phone_number_1) || strlen(trim($request->phone_number_1)) < 5) {
+            return $this->error('Phone number is required and must be at least 5 characters.');
+        }
+
+        // Check for duplicate phone number
+        $anotherUser = Administrator::where('phone_number', $request->phone_number_1)
+            ->where('id', '!=', $u->id)
+            ->first();
         if ($anotherUser != null) {
-            if ($anotherUser->id != $u->id) {
-                return $this->error('Phone number is already taken.');
-            }
+            return $this->error('Phone number is already taken.');
         }
 
-        $anotherUser = Administrator::where([
-            'username' => $request->phone_number_1
-        ])->first();
+        // Check for duplicate username (phone)
+        $anotherUser = Administrator::where('username', $request->phone_number_1)
+            ->where('id', '!=', $u->id)
+            ->first();
         if ($anotherUser != null) {
-            if ($anotherUser->id != $u->id) {
-                return $this->error('Phone number is already taken.');
-            }
+            return $this->error('Phone number is already taken.');
         }
 
-        $anotherUser = Administrator::where([
-            'email' => $request->phone_number_1
-        ])->first();
-        if ($anotherUser != null) {
-            if ($anotherUser->id != $u->id) {
-                return $this->error('Phone number is already taken.');
-            }
-        }
-
-        if (
-            $request->email != null &&
-            strlen($request->email) > 5
-        ) {
-            $anotherUser = Administrator::where([
-                'email' => $request->email
-            ])->first();
-            if ($anotherUser != null) {
-                if ($anotherUser->id != $u->id) {
-                    return $this->error('Email is already taken.');
-                }
-            }
-            //check for username as well
-            $anotherUser = Administrator::where([
-                'username' => $request->email
-            ])->first();
-            if ($anotherUser != null) {
-                if ($anotherUser->id != $u->id) {
-                    return $this->error('Email is already taken.');
-                }
-            }
-            //validate email
+        // Validate email if provided
+        if ($request->email != null && strlen($request->email) > 5) {
             if (!filter_var($request->email, FILTER_VALIDATE_EMAIL)) {
                 return $this->error('Invalid email address.');
             }
+
+            $anotherUser = Administrator::where('email', $request->email)
+                ->where('id', '!=', $u->id)
+                ->first();
+            if ($anotherUser != null) {
+                return $this->error('Email is already taken.');
+            }
+
+            $anotherUser = Administrator::where('username', $request->email)
+                ->where('id', '!=', $u->id)
+                ->first();
+            if ($anotherUser != null) {
+                return $this->error('Email is already taken.');
+            }
         }
 
-
-
-        $msg = "";
-        //first letter to upper case
-        $u->first_name = $request->first_name;
-
-        //change first letter to upper case
-        $u->first_name = ucfirst($u->first_name);
-
-
-        $u->last_name = ucfirst($request->last_name);
-        $u->phone_number = $request->phone_number_1;
-        $u->email = $request->email;
-        $u->address = ucfirst($request->address);
-
-        $images = [];
-        if (!empty($_FILES)) {
-            $images = Utils::upload_images_2($_FILES, false);
-        }
-        if (!empty($images)) {
-            $u->avatar = 'images/' . $images[0];
+        // Validate date of birth if provided
+        if ($request->date_of_birth != null && strlen($request->date_of_birth) > 0) {
+            try {
+                $date = \Carbon\Carbon::createFromFormat('Y-m-d', $request->date_of_birth);
+                if ($date->isFuture()) {
+                    return $this->error('Date of birth cannot be in the future.');
+                }
+            } catch (\Exception $e) {
+                return $this->error('Invalid date of birth format. Use YYYY-MM-DD.');
+            }
         }
 
-        $code = 1;
         try {
+            // Update basic information
+            $u->first_name = ucfirst(trim($request->first_name));
+            $u->last_name = ucfirst(trim($request->last_name));
+            $u->phone_number = $request->phone_number_1;
+            $u->phone_number_1 = $request->phone_number_1;
+            
+            // Update email if provided
+            if ($request->email != null && strlen($request->email) > 5) {
+                $u->email = strtolower(trim($request->email));
+            }
+
+            // Update optional fields
+            if ($request->date_of_birth != null) {
+                $u->date_of_birth = $request->date_of_birth;
+                $u->dob = $request->date_of_birth; // Alternative field name
+            }
+
+            if ($request->gender != null && in_array($request->gender, ['male', 'female', 'other', 'prefer-not-to-say'])) {
+                $u->sex = $request->gender;
+            }
+
+            if ($request->bio != null) {
+                $u->intro = trim($request->bio);
+            }
+
+            if ($request->address != null) {
+                $u->address = ucfirst(trim($request->address));
+                $u->current_address = ucfirst(trim($request->address));
+            }
+
+            // Handle avatar upload if provided
+            $images = [];
+            if (!empty($_FILES)) {
+                $images = Utils::upload_images_2($_FILES, false);
+                if (!empty($images)) {
+                    $u->avatar = 'images/' . $images[0];
+                }
+            }
+
             $u->save();
-            $msg = "Updated successfully.";
-            return $this->success($u, $msg, $code);
+
+            // Return updated user data
+            $updatedUser = Administrator::find($u->id);
+            return $this->success($updatedUser, "Profile updated successfully.", 1);
+
         } catch (\Throwable $th) {
-            $msg = $th->getMessage();
-            $code = 0;
-            return $this->error($msg);
+            return $this->error('Failed to update profile: ' . $th->getMessage());
         }
-        return $this->success(null, $msg, $code);
     }
 
 
@@ -633,11 +639,38 @@ class ApiResurceController extends Controller
     //product_get_by_id
     public function product_get_by_id(Request $r)
     {
-        $product = Product::find($r->id);
-        if ($product == null) {
-            return $this->error('Product not found.');
+        try {
+            $product = Product::with(['specifications', 'productCategory'])->find($r->id);
+            if ($product == null) {
+                return $this->error('Product not found.');
+            }
+
+            // Add computed attributes for better frontend consumption
+            $product->tags_array = $product->tags_array;
+            
+            // Safe specifications mapping
+            $product->attributes_array = $product->specifications ? $product->specifications->map(function ($attr) {
+                return [
+                    'name' => $attr->name ?? '',
+                    'value' => $attr->value ?? '',
+                ];
+            })->toArray() : [];
+
+            // Add category information if available
+            $product->category_info = [];
+            if ($product->productCategory) {
+                $product->category_info = [
+                    'id' => $product->productCategory->id,
+                    'name' => $product->productCategory->name ?? '',
+                    'description' => $product->productCategory->description ?? '',
+                ];
+            }
+
+            return $this->success($product, $message = "Success!", 200);
+        } catch (\Exception $e) {
+            \Log::error('Error in product_get_by_id: ' . $e->getMessage());
+            return $this->error('Unable to retrieve product data. Please try again later.');
         }
-        return $this->success($product, $message = "Success!", 200);
     }
 
     //orders_get_by_id
@@ -1346,25 +1379,55 @@ class ApiResurceController extends Controller
     public function products(Request $request)
     {
         // Start building the query on active products
-        $query = Product::where([]);
+        $query = Product::with(['specifications']);
 
         $searchTerm = null;
         $productIds = [];
 
-        // Filter by search keyword (in the name or description)
+        // Filter by search keyword (in the name, description, or tags)
         if ($request->filled('search')) {
             $searchTerm = $request->input('search');
-            $query->where(function ($q) use ($searchTerm) {
-                $q->where('name', 'LIKE', "%{$searchTerm}%")
-                    ->orWhere('description', 'LIKE', "%{$searchTerm}%");
-            });
+            
+            // Use enhanced search with tag prioritization
+            $query->enhancedSearch($searchTerm);
         }
         if ($request->filled('name')) {
             $name = $request->input('name');
             $query->where(function ($q) use ($name) {
                 $q->where('name', 'LIKE', "%{$name}%")
-                    ->orWhere('description', 'LIKE', "%{$name}%");
+                    ->orWhere('description', 'LIKE', "%{$name}%")
+                    ->orWhere('tags', 'LIKE', "%{$name}%");
             });
+        }
+
+        // Filter by tags
+        if ($request->filled('tags')) {
+            $tags = $request->input('tags');
+            if (is_string($tags)) {
+                $tags = explode(',', $tags);
+            }
+            if (is_array($tags)) {
+                $query->where(function($q) use ($tags) {
+                    foreach ($tags as $tag) {
+                        $q->orWhere('tags', 'LIKE', '%' . trim($tag) . '%');
+                    }
+                });
+            }
+        }
+
+        // Filter by specifications
+        if ($request->filled('attributes')) {
+            $attributes = $request->input('attributes');
+            if (is_string($attributes)) {
+                $attributes = json_decode($attributes, true);
+            }
+            if (is_array($attributes)) {
+                foreach ($attributes as $attrName => $attrValue) {
+                    $query->whereHas('specifications', function($q) use ($attrName, $attrValue) {
+                        $q->where('name', $attrName)->where('value', 'LIKE', "%{$attrValue}%");
+                    });
+                }
+            }
         }
 
         // Filter by category
@@ -1409,9 +1472,22 @@ class ApiResurceController extends Controller
         $perPage = $request->input('per_page', 28);
         $products = $query->paginate($perPage);
 
+        // Add computed attributes for each product
+        $products->through(function ($product) {
+            $product->tags_array = $product->tags_array;
+            $product->attributes_array = $product->specifications->map(function ($attr) {
+                return [
+                    'name' => $attr->name,
+                    'value' => $attr->value,
+                ];
+            })->toArray();
+            return $product;
+        });
+
         // Record search history if there was a search term
         if ($searchTerm && !empty(trim($searchTerm))) {
-            $productIds = $products->pluck('id')->toArray();
+            $productIds = $products->items();
+            $productIds = collect($productIds)->pluck('id')->toArray();
             $resultsCount = $products->total();
             
             // Get user ID if authenticated
@@ -1449,18 +1525,30 @@ class ApiResurceController extends Controller
             ], 'Search term too short');
         }
 
-        // Search products
+        // Search products with enhanced tag search
         $products = Product::where(function ($query) use ($searchTerm) {
+                // Primary search with tag prioritization
                 $query->where('name', 'LIKE', "%{$searchTerm}%")
+                      ->orWhere('tags', 'LIKE', "%{$searchTerm}%")
                       ->orWhere('description', 'LIKE', "%{$searchTerm}%");
+
+                // Additional search for individual words in tags
+                $searchWords = explode(' ', trim($searchTerm));
+                if (count($searchWords) > 1) {
+                    foreach ($searchWords as $word) {
+                        if (strlen(trim($word)) > 2) {
+                            $query->orWhere('tags', 'LIKE', "%{$word}%");
+                        }
+                    }
+                }
             })
             ->limit($limit)
-            ->get(['id', 'name', 'price_1', 'price_2', 'feature_photo', 'category']);
+            ->get(['id', 'name', 'price_1', 'price_2', 'feature_photo', 'category', 'tags']);
 
-        // Get search suggestions based on product names
-        $suggestions = Product::where('name', 'LIKE', "%{$searchTerm}%")
+        // Get search suggestions based on product names and tags
+        $nameSuggestions = Product::where('name', 'LIKE', "%{$searchTerm}%")
             ->distinct()
-            ->limit(5)
+            ->limit(3)
             ->pluck('name')
             ->map(function ($name) use ($searchTerm) {
                 // Extract relevant keywords from product names
@@ -1470,6 +1558,26 @@ class ApiResurceController extends Controller
                 });
             })
             ->flatten()
+            ->unique()
+            ->take(3);
+
+        // Get tag-based suggestions
+        $tagSuggestions = Product::where('tags', 'LIKE', "%{$searchTerm}%")
+            ->whereNotNull('tags')
+            ->where('tags', '!=', '')
+            ->limit(5)
+            ->get(['tags'])
+            ->flatMap(function ($product) use ($searchTerm) {
+                $tags = array_map('trim', explode(',', $product->tags));
+                return array_filter($tags, function ($tag) use ($searchTerm) {
+                    return stripos($tag, $searchTerm) !== false && strlen($tag) > 2;
+                });
+            })
+            ->unique()
+            ->take(4);
+
+        // Combine suggestions
+        $suggestions = $nameSuggestions->concat($tagSuggestions)
             ->unique()
             ->take(5)
             ->values();
@@ -1932,23 +2040,23 @@ class ApiResurceController extends Controller
                     'cart_count' => 0,
                     'notifications_count' => 0,
                     'unread_messages_count' => 0,
-                    'pending_orders' => Order::where('status', 'pending')->count(),
-                    'completed_orders' => Order::where('status', 'completed')->count(),
-                    'cancelled_orders' => Order::where('status', 'cancelled')->count(),
-                    'processing_orders' => Order::where('status', 'processing')->count(),
+                    'pending_orders' => Order::where('order_state', 0)->count(),
+                    'completed_orders' => Order::where('order_state', 2)->count(),
+                    'cancelled_orders' => Order::where('order_state', 3)->count(),
+                    'processing_orders' => Order::where('order_state', 1)->count(),
                     'recent_orders_this_week' => Order::where('created_at', '>=', now()->subWeek())->count(),
                     'orders_today' => Order::whereDate('created_at', today())->count(),
                     'orders_this_month' => Order::whereMonth('created_at', now()->month)->count(),
                     'new_users_this_week' => Administrator::where('created_at', '>=', now()->subWeek())->count(),
                     'new_users_today' => Administrator::whereDate('created_at', today())->count(),
-                    'products_out_of_stock' => Product::where('quantity', '<=', 0)->count(),
-                    'low_stock_products' => Product::where('quantity', '>', 0)->where('quantity', '<=', 10)->count(),
+                    'products_out_of_stock' => Product::where('in_stock', '<=', 0)->count(),
+                    'low_stock_products' => Product::where('in_stock', '>', 0)->where('in_stock', '<=', 10)->count(),
                     'featured_products_count' => Product::where('rates', '>', 4)->count(),
-                    'total_revenue' => Order::where('status', 'completed')->sum('order_total'),
-                    'revenue_this_month' => Order::where('status', 'completed')
+                    'total_revenue' => Order::where('order_state', 2)->sum('order_total'),
+                    'revenue_this_month' => Order::where('order_state', 2)
                         ->whereMonth('created_at', now()->month)
                         ->sum('order_total'),
-                    'average_order_value' => Order::where('status', 'completed')->avg('order_total') ?: 0,
+                    'average_order_value' => Order::where('order_state', 2)->avg('order_total') ?: 0,
                 ],
                 'user' => null,
                 'is_authenticated' => false,
@@ -1972,11 +2080,10 @@ class ApiResurceController extends Controller
                 $manifest['counts']['total_orders'] = Order::where('user', $user->id)->count();
                 $manifest['counts']['wishlist_count'] = \App\Models\Wishlist::where('user_id', $user->id)->count();
                 
-                // Cart count would come from session/local storage, so we'll leave it at 0
-                // and let frontend manage this
-                
-                // Notifications count (if you have a notifications system)
-                // $manifest['counts']['notifications_count'] = Notification::where('user_id', $user->id)->where('read', false)->count();
+                // Include full wishlist data to avoid separate API call
+                $manifest['wishlist'] = \App\Models\Wishlist::where('user_id', $user->id)
+                    ->orderBy('created_at', 'desc')
+                    ->get();
                 
                 // Unread messages count
                 $manifest['counts']['unread_messages_count'] = ChatMessage::where('receiver_id', $user->id)
@@ -1987,9 +2094,10 @@ class ApiResurceController extends Controller
                     ->orderBy('created_at', 'desc')
                     ->limit(5)
                     ->get(['id', 'order_total', 'order_state', 'created_at']);
-
-                // User's delivery addresses (if any)
-                // $manifest['delivery_addresses'] = DeliveryAddress::where('user_id', $user->id)->get();
+            } else {
+                // For guest users, provide empty arrays
+                $manifest['wishlist'] = [];
+                $manifest['recent_orders'] = [];
             }
 
             // Get recent search suggestions for the user (authenticated or guest)
@@ -2008,22 +2116,6 @@ class ApiResurceController extends Controller
                 ->limit(8)
                 ->get(['id', 'name', 'price_1', 'price_2', 'feature_photo', 'category']);
 
-            // Active vendors for quick access
-            $manifest['vendors'] = Administrator::where('user_type', 'Vendor')
-                ->limit(12)
-                ->get(['id', 'first_name', 'last_name', 'business_name', 'email', 'phone_number', 'avatar', 'address'])
-                ->map(function ($vendor) {
-                    return [
-                        'id' => $vendor->id,
-                        'name' => $vendor->business_name ?: ($vendor->first_name . ' ' . $vendor->last_name),
-                        'email' => $vendor->email,
-                        'phone_number' => $vendor->phone_number,
-                        'avatar' => $vendor->avatar,
-                        'address' => $vendor->address,
-                        'profile_photo' => $vendor->avatar, // For compatibility
-                    ];
-                });
-
             return $this->success($manifest, 'Manifest loaded successfully.', 200);
 
         } catch (\Exception $e) {
@@ -2036,19 +2128,31 @@ class ApiResurceController extends Controller
      */
     private function getProductCategories()
     {
-        return ProductCategory::orderBy('id', 'desc')
-            ->get(['id', 'category', 'parent_id', 'category_text', 'image', 'banner_image', 'show_in_banner', 'show_in_categories'])
+        return ProductCategory::with('specifications')
+            ->orderBy('id', 'desc')
+            ->get()
             ->map(function ($category) {
                 return [
                     'id' => $category->id,
                     'category' => $category->category,
-                    'name' => $category->category, // Use category as name
-                    'category_text' => $category->category_text,
+                    'name' => $category->category, // Use name as name
+                    'category_text' => $category->display_count, // Use display count instead of category name
+                    'product_count' => $category->product_count, // Actual product count
+                    'display_count' => $category->display_count, // Display count with +10
                     'parent_id' => $category->parent_id,
                     'image' => $category->image,
                     'banner_image' => $category->banner_image,
                     'show_in_banner' => $category->show_in_banner ?? 'No',
                     'show_in_categories' => $category->show_in_categories ?? 'Yes',
+                    'is_parent' => $category->is_parent ?? 'No',
+                    'icon' => $category->icon,
+                    'specifications' => $category->specifications ? $category->specifications->map(function ($specification) {
+                        return [
+                            'id' => $specification->id,
+                            'name' => $specification->name,
+                            'is_required' => $specification->is_required,
+                        ];
+                    }) : [],
                 ];
             });
     }
@@ -2058,15 +2162,161 @@ class ApiResurceController extends Controller
      */
     private function getDeliveryLocations()
     {
-        return DeliveryAddress::orderBy('name', 'asc')
-            ->get(['id', 'name', 'shipping_cost', 'details'])
+        return DeliveryAddress::orderBy('address', 'asc')
+            ->get(['id', 'address', 'shipping_cost', ])
             ->map(function ($location) {
                 return [
                     'id' => $location->id,
-                    'name' => $location->name,
-                    'shipping_cost' => $location->shipping_cost,
-                    'details' => $location->details,
+                    'name' => $location->address,
+                    'shipping_cost' => $location->shipping_cost, 
                 ];
             });
+    }
+
+    /**
+     * Get all product categories
+     */
+    public function categories(Request $request)
+    {
+        try {
+            $categories = ProductCategory::all()->map(function ($category) {
+                return [
+                    'id' => $category->id,
+                    'category' => $category->category,
+                    'details' => $category->details ?? '',
+                    'parent_id' => $category->parent_id ?? null,
+                ];
+            });
+
+            return $this->success($categories, 'Categories retrieved successfully');
+        } catch (\Exception $e) {
+            return $this->error('Failed to retrieve categories: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Get popular tags from products
+     */
+    public function popular_tags(Request $request)
+    {
+        $limit = $request->input('limit', 20);
+        
+        // Get all products with tags
+        $products = Product::whereNotNull('tags')
+            ->where('tags', '!=', '')
+            ->get(['tags']);
+            
+        // Extract and count all tags
+        $tagCounts = [];
+        foreach ($products as $product) {
+            $tags = array_map('trim', explode(',', $product->tags));
+            foreach ($tags as $tag) {
+                if (!empty($tag)) {
+                    $tag = strtolower($tag);
+                    $tagCounts[$tag] = ($tagCounts[$tag] ?? 0) + 1;
+                }
+            }
+        }
+        
+        // Sort by popularity and return top tags
+        arsort($tagCounts);
+        $popularTags = array_slice(array_keys($tagCounts), 0, $limit);
+        
+        return $this->success([
+            'tags' => $popularTags,
+            'total_tags' => count($tagCounts),
+            'total_products_with_tags' => $products->count()
+        ], 'Popular tags retrieved successfully');
+    }
+
+    /**
+     * Search products by specific tags only
+     */
+    public function search_by_tags(Request $request)
+    {
+        $tags = $request->input('tags', '');
+        $perPage = $request->input('per_page', 16);
+        
+        if (empty($tags)) {
+            return $this->error('Tags parameter is required');
+        }
+        
+        // Convert tags to array
+        if (is_string($tags)) {
+            $tags = array_map('trim', explode(',', $tags));
+        }
+        
+        // Search products with any of the specified tags
+        $query = Product::with(['specifications']);
+        
+        $query->where(function($q) use ($tags) {
+            foreach ($tags as $tag) {
+                if (!empty(trim($tag))) {
+                    $q->orWhere('tags', 'LIKE', '%' . trim($tag) . '%');
+                               }
+            }
+        });
+        
+        // Order by relevance (products with more matching tags first)
+        $query->orderByRaw("
+            CASE 
+                WHEN tags LIKE '%" . implode("%' AND tags LIKE '%", $tags) . "%' THEN 1
+                ELSE 2
+            END
+        ");
+        
+        $products = $query->paginate($perPage);
+        
+        // Add computed attributes for each product
+        $products->through(function ($product) {
+            $product->tags_array = $product->tags_array;
+            $product->attributes_array = $product->specifications->map(function ($attr) {
+                return [
+                    'name' => $attr->name,
+                    'value' => $attr->value,
+                ];
+            })->toArray();
+            return $product;
+        });
+        
+        return $this->success($products, 'Search by tags completed successfully');
+    }
+
+    /**
+     * Get tag suggestions based on partial input
+     */
+    public function tag_suggestions(Request $request)
+    {
+        $partial = $request->input('q', '');
+        $limit = $request->input('limit', 10);
+        
+        if (strlen($partial) < 2) {
+            return $this->success([], 'Query too short');
+        }
+        
+        // Get products with tags containing the partial string
+        $products = Product::whereNotNull('tags')
+            ->where('tags', '!=', '')
+            ->where('tags', 'LIKE', "%{$partial}%")
+            ->get(['tags']);
+        
+        // Extract matching tags
+        $suggestions = collect();
+        foreach ($products as $product) {
+            $tags = array_map('trim', explode(',', $product->tags));
+            foreach ($tags as $tag) {
+                if (stripos($tag, $partial) !== false && strlen($tag) > 1) {
+                    $suggestions->push(strtolower($tag));
+                }
+            }
+        }
+        
+        // Remove duplicates and limit results
+        $suggestions = $suggestions->unique()->take($limit)->values();
+        
+        return $this->success([
+            'suggestions' => $suggestions,
+            'query' => $partial
+        ], 'Tag suggestions retrieved');
     }
 }

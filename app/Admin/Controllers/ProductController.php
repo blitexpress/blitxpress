@@ -85,6 +85,8 @@ class ProductController extends AdminController
                 return date('Y-m-d H:i:s', strtotime($created_at));
             })->sortable();
 
+        // add this as has many specifications
+
         return $grid;
     }
 
@@ -140,9 +142,14 @@ class ProductController extends AdminController
         $last = Image::where([])->get()->last();
         $last->create_thumbail();
         $form = new Form(new Product());
-        $form->hidden('local_id')->value(Utils::get_unique_text());  
+        $form->hidden('local_id')->value(Utils::get_unique_text());
 
         $form->text('name', __('Product Name'))
+            ->rules('required');
+
+        //tags
+        $form->tags('tags', __('Tags'))
+            ->placeholder('e.g., electronics, smartphone, android, mobile, communication, technology')
             ->rules('required');
 
         // Ensure the currency is set to UGX only.
@@ -227,12 +234,26 @@ class ProductController extends AdminController
         // $form->url('url', __('URL'));
         // $form->decimal('rates', __('Rates'));
 
+        $form->divider('Product Details',);
         // has many images
         $form->hasMany('images', 'Images', function (Form\NestedForm $form) {
             $u = Auth::user();
             $form->image('src', 'Image')->uniqueName();
             $form->hidden('administrator_id')->value($u->id);
         });
+
+        $form->divider('Product Specifications');
+
+        //has many specifications
+        $form->hasMany('specifications', 'Specifications', function (Form\NestedForm $form) {
+            $form->text('name', __('Specification Name'))
+                ->placeholder('e.g., Size, Color, Material')
+                ->rules('required|max:255');
+            $form->text('value', __('Value'))
+                ->placeholder('e.g., Large, Red, Cotton');
+        });
+
+
 
         return $form;
     }

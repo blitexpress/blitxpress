@@ -55,41 +55,17 @@ class Utils extends Model
 
     public static function get_stripe()
     {
-        $key = env('STRIPE_KEY');
-        $stripe = new \Stripe\StripeClient($key);
-        return $stripe;
+        return '';
     }
     public static function sync_orders()
     {
-        $key = env('STRIPE_KEY');
-        $stripe = new \Stripe\StripeClient($key);
-
-        $roders = \App\Models\Order::where([
-            'stripe_id' => null
-        ])->get();
-        foreach ($roders as $key => $order) {
-            if (($order->stripe_id != null) && (strlen($order->stripe_id) > 0)) {
-                continue;
-            }
-
-            if (count($order->get_items()) == 0) {
-                continue;
-            }
-            $order->create_payment_link($stripe);
-        }
+        return ''; 
     }
 
     public static function sync_products()
     {
 
-        return;
-        $stripe = new \Stripe\StripeClient(env('STRIPE_KEY'));
-        $products = Product::where([
-            'stripe_price' => null
-        ])->get();
-        foreach ($products as $key => $value) {
-            $value->sync($stripe);
-        }
+        return; 
     }
     public static function sendNotification(
         $msg,

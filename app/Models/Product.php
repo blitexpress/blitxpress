@@ -6,9 +6,21 @@ use Dflydev\DotAccessData\Util;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+// Import the new specification models
+use App\Models\ProductHasSpecification;
+
 class Product extends Model
 {
     use HasFactory;
+
+    /**
+     * The attributes that are mass assignable.
+     */
+    protected $fillable = [
+        'name', 'price', 'description', 'tags', 'local_id', 'category', 'feature_photo',
+        'colors', 'keywords', 'sizes', 'summary', 'quantity', 'min_quantity_alert',
+        'review_count', 'average_rating'
+    ];
 
     public static function boot()
     {
@@ -31,7 +43,7 @@ class Product extends Model
         });
         //updated
         self::updated(function ($m) {
-            $m->sync(Utils::get_stripe());
+            // $m->sync(Utils::get_stripe()); // Disabled to prevent memory issues
         });
 
         self::deleting(function ($m) {
@@ -40,6 +52,9 @@ class Product extends Model
                 foreach ($imgs as $img) {
                     $img->delete();
                 }
+                
+                // Delete all product specifications when product is deleted
+                ProductHasSpecification::where('product_id', $m->id)->delete();
             } catch (\Throwable $th) {
                 //throw $th;
             }
@@ -71,14 +86,15 @@ class Product extends Model
 
         return;
     }
-    public function getRatesAttribute()
-    {
-        $imgs = Image::where('parent_id', $this->id)->orwhere('product_id', $this->id)->get();
-        return json_encode($imgs);
-    }
+    // Removed getRatesAttribute to prevent memory issues
+    // public function getRatesAttribute()
+    // {
+    //     $imgs = Image::where('parent_id', $this->id)->orwhere('product_id', $this->id)->get();
+    //     return json_encode($imgs);
+    // }
 
 
-    protected $appends = ['category_text'];
+    protected $appends = ['category_text', 'tags_array'];
     public function getCategoryTextAttribute()
     {
         $d = ProductCategory::find($this->category);
@@ -91,6 +107,9 @@ class Product extends Model
     //getter for colors from json
     public function getColorsAttribute($value)
     {
+        if ($value === null) {
+            return '';
+        }
         $resp = str_replace('\"', '"', $value);
         $resp = str_replace('[', '', $resp);
         $resp = str_replace(']', '', $resp);
@@ -141,6 +160,9 @@ class Product extends Model
     //getter for sizes
     public function getSizesAttribute($value)
     {
+        if ($value === null) {
+            return '';
+        }
         $resp = str_replace('\"', '"', $value);
         $resp = str_replace('[', '', $resp);
         $resp = str_replace(']', '', $resp);
@@ -165,8 +187,307 @@ class Product extends Model
         return $this->hasMany(Image::class, 'product_id', 'id');
     }
 
+    //has many ProductHasSpecification
+    public function specifications()
+    {
+        return $this->hasMany(ProductHasSpecification::class, 'product_id', 'id');
+    }
+
+    //has many ProductHasAttribute  
+    public function attributes()
+    {
+        return $this->hasMany(ProductHasAttribute::class, 'product_id', 'id');
+    }
+
+    //belongs to ProductCategory
+    public function productCategory()
+    {
+        return $this->belongsTo(ProductCategory::class, 'category', 'id');
+    }
+
+    /**
+     * Get specification value by name - TEMPORARILY DISABLED
+     */
+    // public function getSpecificationValue($specificationName)
+    // {
+    //     $specification = $this->specifications()->where('name', $specificationName)->first();
+    //     return $specification ? $specification->value : null;
+    // }
+
+    /**
+     * Set specification value by name - TEMPORARILY DISABLED
+     */
+    // public function setSpecificationValue($specificationName, $value)
+    // {
+    //     return $this->specifications()->updateOrCreate(
+    //         ['name' => $specificationName],
+    //         ['value' => $value]
+    //     );
+    // }
+
+    /**
+     * Get all specifications as key-value pairs - TEMPORARILY DISABLED
+     */
+    // public function getSpecificationsArrayAttribute()
+    // {
+    //     try {
+    //         return $this->productSpecifications()->get()->map(function ($spec) {
+    //             return [
+    //                 'name' => $spec->name,
+    //                 'value' => $spec->value
+    //             ];
+    //         })->toArray();
+    //     } catch (\Exception $e) {
+    //         return [];
+    //     }
+    // }
+
+    /**
+     * Get tags as array
+     */
+    public function getTagsArrayAttribute()
+    {
+        if (empty($this->tags)) {
+            return [];
+        }
+        return array_map('trim', explode(',', $this->tags));
+    }
+
+    /**
+     * Set tags from array
+     */
+    public function setTagsFromArray(array $tags)
+    {
+        $this->tags = implode(',', array_map('trim', $tags));
+        return $this;
+    }
+
+    /**
+     * Check if product has a specific tag
+     */
+    public function hasTag($tag)
+    {
+        return in_array(trim($tag), $this->tags_array);
+    }
+
+    /**
+     * Add a tag to the product
+     */
+    public function addTag($tag)
+    {
+        $tags = $this->tags_array;
+        $tag = trim($tag);
+        
+        if (!in_array($tag, $tags)) {
+            $tags[] = $tag;
+            $this->setTagsFromArray($tags);
+        }
+        
+        return $this;
+    }
+
+    /**
+     * Remove a tag from the product
+     */
+    public function removeTag($tag)
+    {
+        $tags = $this->tags_array;
+        $tag = trim($tag);
+        
+        $tags = array_filter($tags, function($t) use ($tag) {
+            return $t !== $tag;
+        });
+        
+        $this->setTagsFromArray($tags);
+        return $this;
+    }
+
+    /**
+     * Scope to filter products by tags
+     */
+    public function scopeWithTag($query, $tag)
+    {
+        return $query->where('tags', 'LIKE', '%' . trim($tag) . '%');
+    }
+
+    /**
+     * Scope to filter products by multiple tags (OR condition)
+     */
+    public function scopeWithAnyTag($query, array $tags)
+    {
+        return $query->where(function($q) use ($tags) {
+            foreach ($tags as $tag) {
+                $q->orWhere('tags', 'LIKE', '%' . trim($tag) . '%');
+            }
+        });
+    }
+
+    /**
+     * Scope to filter products by multiple tags (AND condition)
+     */
+    public function scopeWithAllTags($query, array $tags)
+    {
+        foreach ($tags as $tag) {
+            $query->where('tags', 'LIKE', '%' . trim($tag) . '%');
+        }
+        return $query;
+    }
+
+    /**
+     * Search products by name, description, or tags with enhanced scoring
+     */
+    public function scopeSearch($query, $searchTerm)
+    {
+        return $query->where(function($q) use ($searchTerm) {
+            $q->where('name', 'LIKE', '%' . $searchTerm . '%')
+              ->orWhere('description', 'LIKE', '%' . $searchTerm . '%')
+              ->orWhere('tags', 'LIKE', '%' . $searchTerm . '%');
+        });
+    }
+
+    /**
+     * Enhanced search with tag prioritization and scoring
+     */
+    public function scopeEnhancedSearch($query, $searchTerm)
+    {
+        $searchWords = array_filter(explode(' ', trim($searchTerm)), function($word) {
+            return strlen(trim($word)) > 2;
+        });
+
+        return $query->where(function($q) use ($searchTerm, $searchWords) {
+            // Exact name match (highest priority)
+            $q->where('name', 'LIKE', '%' . $searchTerm . '%');
+            
+            // Exact tag match (high priority)
+            $q->orWhere('tags', 'LIKE', '%' . $searchTerm . '%');
+            
+            // Individual word matches in tags
+            foreach ($searchWords as $word) {
+                $q->orWhere('tags', 'LIKE', '%' . trim($word) . '%');
+            }
+            
+            // Description match (lower priority)
+            $q->orWhere('description', 'LIKE', '%' . $searchTerm . '%');
+        })
+        ->orderByRaw("
+            CASE 
+                WHEN name LIKE '%{$searchTerm}%' THEN 1
+                WHEN tags LIKE '%{$searchTerm}%' THEN 2
+                WHEN description LIKE '%{$searchTerm}%' THEN 3
+                ELSE 4
+            END
+        ");
+    }
+
+    /**
+     * Get search relevance score for a product
+     */
+    public function getSearchRelevanceScore($searchTerm)
+    {
+        $score = 0;
+        $searchLower = strtolower($searchTerm);
+        $nameLower = strtolower($this->name);
+        $descriptionLower = strtolower($this->description ?? '');
+        $tagsLower = strtolower($this->tags ?? '');
+
+        // Exact matches
+        if (stripos($nameLower, $searchLower) !== false) {
+            $score += 100;
+        }
+        if (stripos($tagsLower, $searchLower) !== false) {
+            $score += 80;
+        }
+        if (stripos($descriptionLower, $searchLower) !== false) {
+            $score += 30;
+        }
+
+        // Word matches in tags
+        $searchWords = explode(' ', $searchLower);
+        $tags = array_map('trim', explode(',', $tagsLower));
+        
+        foreach ($searchWords as $word) {
+            if (strlen(trim($word)) > 2) {
+                foreach ($tags as $tag) {
+                    if (stripos($tag, trim($word)) !== false) {
+                        $score += 20;
+                    }
+                }
+            }
+        }
+
+        return $score;
+    }
+
 
     protected $casts = [
         'summary' => 'json',
     ];
+
+    /**
+     * Get product specifications relationship - TEMPORARILY DISABLED
+     */
+    // public function productSpecifications()
+    // {
+    //     return $this->hasMany(ProductHasSpecification::class, 'product_id');
+    // }
+
+    /**
+     * Get all reviews for this product
+     */
+    public function reviews()
+    {
+        return $this->hasMany(Review::class);
+    }
+
+    /**
+     * Get recent reviews for this product
+     */
+    public function recentReviews($limit = 5)
+    {
+        return $this->hasMany(Review::class)->latest()->limit($limit);
+    }
+
+    /**
+     * Get reviews with specific rating
+     */
+    public function reviewsWithRating($rating)
+    {
+        return $this->hasMany(Review::class)->where('rating', $rating);
+    }
+
+    /**
+     * Get formatted average rating with stars
+     */
+    public function getFormattedRatingAttribute()
+    {
+        $rating = round($this->average_rating);
+        return str_repeat('★', $rating) . str_repeat('☆', 5 - $rating);
+    }
+
+    /**
+     * Check if user has reviewed this product
+     */
+    public function hasUserReviewed($userId)
+    {
+        return $this->reviews()->where('user_id', $userId)->exists();
+    }
+
+    /**
+     * Get user's review for this product
+     */
+    public function getUserReview($userId)
+    {
+        return $this->reviews()->where('user_id', $userId)->first();
+    }
+
+    /**
+     * Calculate and update review statistics
+     */
+    public function updateReviewStats()
+    {
+        $reviews = $this->reviews();
+        $this->review_count = $reviews->count();
+        $this->average_rating = $reviews->avg('rating') ?: 0;
+        $this->save();
+    }
 }

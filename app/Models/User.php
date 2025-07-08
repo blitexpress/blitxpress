@@ -105,4 +105,36 @@ class User extends Authenticatable implements JWTSubject
     {
         return $this->hasManyThrough(Product::class, Wishlist::class, 'user_id', 'id', 'id', 'product_id');
     }
+
+    /**
+     * Get all reviews written by this user.
+     */
+    public function reviews()
+    {
+        return $this->hasMany(Review::class);
+    }
+
+    /**
+     * Get recent reviews by this user.
+     */
+    public function recentReviews($limit = 5)
+    {
+        return $this->hasMany(Review::class)->latest()->limit($limit);
+    }
+
+    /**
+     * Check if user has reviewed a specific product.
+     */
+    public function hasReviewedProduct($productId)
+    {
+        return $this->reviews()->where('product_id', $productId)->exists();
+    }
+
+    /**
+     * Get user's review for a specific product.
+     */
+    public function getProductReview($productId)
+    {
+        return $this->reviews()->where('product_id', $productId)->first();
+    }
 }
