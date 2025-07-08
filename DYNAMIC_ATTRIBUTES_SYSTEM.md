@@ -791,7 +791,7 @@ The system is designed to be easily extensible:
 
 3. **Test API Response**:
    ```bash
-   curl -s "http://localhost:8888/blitxpress/api/manifest" | python3 -m json.tool
+   curl -s "https://blit.blitxpress.com/api/manifest" | python3 -m json.tool
    ```
 
 4. **Admin Panel Testing**:
