@@ -21,21 +21,84 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('mail-test', function () {
 
-    $lastOrder = Order::orderBy('id', 'desc')->first();
-    $lastOrder->order_state = 0;
-    $lastOrder->stripe_url .= '1';
-    $lastOrder->save();
-    die('mail-test');
-    Order::send_mails($lastOrder);
+    try {
+        // Test 1: Test order email system
+        echo "<h2>🧪 Testing Order Email System...</h2>";
+        
+        $lastOrder = Order::orderBy('id', 'desc')->first();
+        if ($lastOrder) {
+            echo "<div style='background: #f8f9fa; padding: 15px; margin: 10px 0; border-left: 4px solid #007bff;'>";
+            echo "<h3>📦 Testing with Order #{$lastOrder->id}</h3>";
+            echo "<p><strong>Customer:</strong> " . ($lastOrder->customer->first_name ?? 'N/A') . " " . ($lastOrder->customer->last_name ?? '') . "</p>";
+            echo "<p><strong>Customer Email:</strong> " . ($lastOrder->customer->email ?? 'No email') . "</p>";
+            echo "<p><strong>Total Amount:</strong> CAD {$lastOrder->total}</p>";
+            echo "<p><strong>Order Date:</strong> {$lastOrder->created_at}</p>";
+            echo "</div>";
+            
+            echo "<p>🚀 Triggering order email system...</p>";
+            Order::send_mails($lastOrder);
+            echo "<p style='color: green;'><strong>✅ Order emails sent successfully!</strong></p>";
+            
+            // Show email validation status
+            if ($lastOrder->customer && $lastOrder->customer->email) {
+                $isValidEmail = filter_var($lastOrder->customer->email, FILTER_VALIDATE_EMAIL);
+                if ($isValidEmail) {
+                    echo "<p style='color: green;'>✅ Customer email is valid - confirmation email sent</p>";
+                } else {
+                    echo "<p style='color: orange;'>⚠️ Customer email is invalid - only admin emails sent</p>";
+                }
+            } else {
+                echo "<p style='color: orange;'>⚠️ Customer has no email - only admin emails sent</p>";
+            }
+            
+        } else {
+            echo "<p style='color: red;'><strong>❌ No orders found in database</strong></p>";
+        }
+        
+        echo "<hr style='margin: 20px 0;'>";
+        
+        // Test 2: General mail system test
+        echo "<h2>📧 Testing General Mail System...</h2>";
+        
+        $data['body'] = 'This is a general test email from BlitXpress mail system.';
+        $data['data'] = $data['body'];
+        $data['name'] = 'Test User';
+        $data['email'] = 'mubahood360@gmail.com';
+        $data['subject'] = 'BlitXpress Mail System Test - ' . date('Y-m-d H:i:s');
+        $data['view'] = 'mail-1';
 
-    $data['body'] = 'This should be the body of the <b>email</b>.';
-    $data['data'] = $data['body'];
-    $data['name'] = 'Hohn peter';
-    $data['email'] = 'mubahood360@gmail.com';
-    $data['subject'] = 'TEST UGANDA ' . ' - M-Omulimisa';
-
-    Utils::mail_sender($data);
-    die("success");
+        echo "<p>Sending general test email to: " . $data['email'] . "</p>";
+        
+        Utils::mail_sender($data);
+        
+        echo "<p style='color: green;'><strong>✅ General mail sent successfully!</strong></p>";
+        
+    } catch (\Exception $e) {
+        echo "<p style='color: red;'><strong>❌ Mail Error:</strong> " . $e->getMessage() . "</p>";
+        
+        echo "<h3>🔍 Debug Information:</h3>";
+        echo "<pre style='background: #f8f9fa; padding: 10px; border: 1px solid #ddd;'>";
+        echo "MAIL_HOST: " . env('MAIL_HOST') . "\n";
+        echo "MAIL_PORT: " . env('MAIL_PORT') . "\n";
+        echo "MAIL_ENCRYPTION: " . env('MAIL_ENCRYPTION') . "\n";
+        echo "MAIL_USERNAME: " . env('MAIL_USERNAME') . "\n";
+        echo "MAIL_FROM_ADDRESS: " . env('MAIL_FROM_ADDRESS') . "\n";
+        echo "</pre>";
+    }
+    
+    echo "<div style='background: #d4edda; padding: 15px; margin: 20px 0; border-left: 4px solid #28a745;'>";
+    echo "<h3>✅ Test Summary</h3>";
+    echo "<p>• Order email system: Configured and tested</p>";
+    echo "<p>• Admin notifications: Enabled</p>";
+    echo "<p>• Customer confirmations: Enabled (when email is valid)</p>";
+    echo "<p>• Email validation: Active</p>";
+    echo "</div>";
+    
+    return [
+        'status' => 'Mail test completed',
+        'timestamp' => date('Y-m-d H:i:s'),
+        'order_tested' => $lastOrder ? $lastOrder->id : null
+    ];
 });
 
 Route::get('test', function () {

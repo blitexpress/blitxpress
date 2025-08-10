@@ -183,19 +183,44 @@ class ApiResurceController extends Controller
             return $this->error('User not found.');
         }
 
-        // Log the incoming data for debugging
-        Log::info('Profile update request data:', $request->all());
+        // Log the incoming data for debugging - expanded logging
+        Log::info('Profile update request - All data:', [
+            'all_request_data' => $request->all(),
+            'first_name_raw' => $request->first_name,
+            'first_name_exists' => $request->has('first_name'),
+            'first_name_filled' => $request->filled('first_name'),
+            'request_method' => $request->method(),
+            'content_type' => $request->header('Content-Type'),
+        ]);
 
-        // Validate required fields
-        if (empty($request->first_name) || strlen(trim($request->first_name)) < 2) {
+        // Validate required fields with detailed logging
+        $first_name = trim($request->first_name ?? '');
+        if (empty($first_name) || strlen($first_name) < 2) {
+            Log::warning('First name validation failed', [
+                'first_name_raw' => $request->first_name,
+                'first_name_trimmed' => $first_name,
+                'trimmed_length' => strlen($first_name)
+            ]);
             return $this->error('First name is required and must be at least 2 characters.');
         }
 
-        if (empty($request->last_name) || strlen(trim($request->last_name)) < 2) {
+        $last_name = trim($request->last_name ?? '');
+        if (empty($last_name) || strlen($last_name) < 2) {
+            Log::warning('Last name validation failed', [
+                'last_name_raw' => $request->last_name,
+                'last_name_trimmed' => $last_name,
+                'trimmed_length' => strlen($last_name)
+            ]);
             return $this->error('Last name is required and must be at least 2 characters.');
         }
 
-        if (empty($request->phone_number_1) || strlen(trim($request->phone_number_1)) < 5) {
+        $phone_number_1 = trim($request->phone_number_1 ?? '');
+        if (empty($phone_number_1) || strlen($phone_number_1) < 5) {
+            Log::warning('Phone number validation failed', [
+                'phone_number_1_raw' => $request->phone_number_1,
+                'phone_number_1_trimmed' => $phone_number_1,
+                'trimmed_length' => strlen($phone_number_1)
+            ]);
             return $this->error('Phone number is required and must be at least 5 characters.');
         }
 
@@ -249,11 +274,11 @@ class ApiResurceController extends Controller
         }
 
         try {
-            // Update basic information
-            $u->first_name = ucfirst(trim($request->first_name));
-            $u->last_name = ucfirst(trim($request->last_name));
-            $u->phone_number = $request->phone_number_1;
-            $u->phone_number_1 = $request->phone_number_1;
+            // Update basic information using the validated trimmed values
+            $u->first_name = ucfirst($first_name);
+            $u->last_name = ucfirst($last_name);
+            $u->phone_number = $phone_number_1;  // Correct database field
+            $u->name = ucfirst($first_name) . ' ' . ucfirst($last_name);  // Update full name
             
             // Update email if provided
             if ($request->email != null && strlen($request->email) > 5) {
@@ -262,16 +287,25 @@ class ApiResurceController extends Controller
 
             // Update optional fields
             if ($request->date_of_birth != null) {
-                $u->date_of_birth = $request->date_of_birth;
-                $u->dob = $request->date_of_birth; // Alternative field name
+                $u->dob = $request->date_of_birth; // Correct database field is 'dob'
             }
 
             if ($request->gender != null && in_array($request->gender, ['male', 'female', 'other', 'prefer-not-to-say'])) {
                 $u->sex = $request->gender;
             }
 
+            // Also handle 'sex' field directly for compatibility
+            if ($request->sex != null && in_array($request->sex, ['male', 'female', 'other', 'prefer-not-to-say'])) {
+                $u->sex = $request->sex;
+            }
+
             if ($request->bio != null) {
                 $u->intro = trim($request->bio);
+            }
+
+            // Also handle 'intro' field directly for compatibility
+            if ($request->intro != null) {
+                $u->intro = trim($request->intro);
             }
 
             if ($request->address != null) {
@@ -850,7 +884,7 @@ class ApiResurceController extends Controller
         $order = Order::find($order->id);
 
 
-        return $this->success($order, $message = "Submitted successfully!", 200);
+        return $this->success($order, "Submitted successfully!");
     }
 
 
@@ -946,7 +980,7 @@ class ApiResurceController extends Controller
         } */
         $order = Order::find($order->id);
 
-        return $this->success($order, $message = "Submitted successfully!", 200);
+        return $this->success($order, "Submitted successfully!");
     }
 
 
