@@ -1505,6 +1505,17 @@ class ApiResurceController extends Controller
             $query->where('in_stock', $request->input('availability'));
         }
 
+        // Filter by home sections (Flash Sales, Super Buyer, Top Products)
+        if ($request->filled('home_section_1')) {
+            $query->where('home_section_1', $request->input('home_section_1'));
+        }
+        if ($request->filled('home_section_2')) {
+            $query->where('home_section_2', $request->input('home_section_2'));
+        }
+        if ($request->filled('home_section_3')) {
+            $query->where('home_section_3', $request->input('home_section_3'));
+        }
+
         // Sorting logic based on 'sort' parameter
         if ($request->filled('sort')) {
             $sort = $request->input('sort');

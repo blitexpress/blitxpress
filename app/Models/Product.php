@@ -19,7 +19,7 @@ class Product extends Model
     protected $fillable = [
         'name', 'price', 'description', 'tags', 'local_id', 'category', 'feature_photo',
         'colors', 'keywords', 'sizes', 'summary', 'quantity', 'min_quantity_alert',
-        'review_count', 'average_rating'
+        'review_count', 'average_rating', 'home_section_1', 'home_section_2', 'home_section_3'
     ];
 
     public static function boot()

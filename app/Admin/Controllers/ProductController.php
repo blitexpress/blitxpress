@@ -253,7 +253,31 @@ class ProductController extends AdminController
                 ->placeholder('e.g., Large, Red, Cotton');
         });
 
+        $form->divider('Homepage Sections');
 
+        $form->radio('home_section_1', __('Flash Sales Section'))
+            ->options([
+                'Yes' => 'Yes - Show in Flash Sales',
+                'No' => 'No - Don\'t show in Flash Sales'
+            ])
+            ->default('No')
+            ->help('Select "Yes" to display this product in the Flash Sales section on homepage');
+
+        $form->radio('home_section_2', __('Super Buyer Section'))
+            ->options([
+                'Yes' => 'Yes - Show in Super Buyer',
+                'No' => 'No - Don\'t show in Super Buyer'
+            ])
+            ->default('No')
+            ->help('Select "Yes" to display this product in the Super Buyer section on homepage');
+
+        $form->radio('home_section_3', __('Top Products Section'))
+            ->options([
+                'Yes' => 'Yes - Show in Top Products',
+                'No' => 'No - Don\'t show in Top Products'
+            ])
+            ->default('No')
+            ->help('Select "Yes" to display this product in the Top Products section on homepage');
 
         return $form;
     }
