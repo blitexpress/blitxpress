@@ -11,6 +11,35 @@ use Stripe\Customer;
 class Order extends Model
 {
     use HasFactory;
+    
+    /**
+     * The attributes that are mass assignable.
+     */
+    protected $fillable = [
+        'order_state',
+        'amount',
+        'payment_confirmation',
+        'mail',
+        'delivery_district',
+        'description',
+        'customer_name',
+        'customer_phone_number_1',
+        'customer_phone_number_2',
+        'customer_address',
+        'order_total',
+        'order_details',
+        'delivery_method',
+        'delivery_address_id',
+        'delivery_address_text',
+        'delivery_address_details',
+        'delivery_amount',
+        'payable_amount',
+        'items',
+        'phone_number_2',
+        'phone_number_1',
+        'phone_number'
+    ];
+    
     //boot
     public static function boot()
     {
@@ -50,6 +79,8 @@ class Order extends Model
     public static function send_mails($m)
     {
         try {
+            Log::info("Checking emails for order {$m->id} with state {$m->order_state}");
+            
             $customer = User::find($m->user);
             if ($customer == null) {
                 Log::warning('Order email: Customer not found for order ID: ' . $m->id);
@@ -59,9 +90,11 @@ class Order extends Model
             // Check what emails need to be sent based on order state and sent status
             $emailType = self::getEmailTypeToSend($m);
             if (!$emailType) {
-                Log::info('No email needed for order ' . $m->id . ' with state ' . $m->order_state);
+                Log::info("No email needed for order {$m->id} with state {$m->order_state} - all emails already sent");
                 return;
             }
+
+            Log::info("Sending {$emailType} email for order {$m->id}");
 
             // Generate email content based on order state
             $emailContent = self::generateEmailContent($m, $customer, $emailType);
@@ -89,10 +122,12 @@ class Order extends Model
                     // Mark email as sent using direct DB update to avoid triggering hooks
                     self::markEmailAsSent($m->id, $emailType);
 
-                    Log::info("Order {$emailType} email sent to customer for order " . $m->id);
+                    Log::info("Order {$emailType} email sent successfully to customer {$customer->email} for order {$m->id}");
                 } catch (\Throwable $th) {
-                    Log::error('Failed to send customer email for order ' . $m->id . ': ' . $th->getMessage());
+                    Log::error("Failed to send {$emailType} customer email for order {$m->id}: " . $th->getMessage());
                 }
+            } else {
+                Log::warning("Invalid or missing customer email for order {$m->id}. Email: " . ($customer->email ?? 'NULL'));
             }
 
             // Send admin notification only for new orders (pending state)
@@ -115,6 +150,7 @@ class Order extends Model
 
                         set_time_limit(30);
                         Utils::mail_sender($adminData);
+                        Log::info("Admin notification sent to {$adminEmail} for order {$m->id}");
                     } catch (\Throwable $th) {
                         Log::error('Failed to send admin email for order ' . $m->id . ' to ' . $adminEmail . ': ' . $th->getMessage());
                     }
@@ -130,20 +166,28 @@ class Order extends Model
      */
     private static function getEmailTypeToSend($order)
     {
-        switch ($order->order_state) {
-            case 0: // Pending
-                return ($order->pending_mail_sent !== 'Yes') ? 'pending' : null;
-            case 1: // Processing 
-                return ($order->processing_mail_sent !== 'Yes') ? 'processing' : null;
-            case 2: // Completed
-                return ($order->completed_mail_sent !== 'Yes') ? 'completed' : null;
-            case 3: // Canceled
-                return ($order->canceled_mail_sent !== 'Yes') ? 'canceled' : null;
-            case 4: // Failed
-                return ($order->failed_mail_sent !== 'Yes') ? 'failed' : null;
-            default:
-                return null;
+        $stateMap = [
+            0 => 'pending',
+            1 => 'processing',
+            2 => 'completed',
+            3 => 'canceled',
+            4 => 'failed'
+        ];
+
+        $state = (int)$order->order_state;
+        
+        if (!isset($stateMap[$state])) {
+            Log::warning("Unknown order state {$state} for order {$order->id}");
+            return null;
         }
+
+        $emailType = $stateMap[$state];
+        $sentField = $emailType . '_mail_sent';
+        $alreadySent = $order->{$sentField} === 'Yes';
+
+        Log::info("Order {$order->id} - State: {$state} ({$emailType}), {$sentField}: " . ($order->{$sentField} ?? 'NULL') . ", Already sent: " . ($alreadySent ? 'Yes' : 'No'));
+
+        return $alreadySent ? null : $emailType;
     }
 
     /**
@@ -195,6 +239,30 @@ class Order extends Model
     {
         $field = $emailType . '_mail_sent';
         DB::table('orders')->where('id', $orderId)->update([$field => 'Yes']);
+    }
+
+    /**
+     * Manual method to send any pending emails for all orders
+     * This can be used to catch up on missed emails
+     */
+    public static function sendPendingEmails()
+    {
+        Log::info('Starting manual email send for all orders with pending emails');
+        
+        $orders = self::whereIn('order_state', [0, 1, 2, 3, 4])->get();
+        $emailsSent = 0;
+        
+        foreach ($orders as $order) {
+            $emailType = self::getEmailTypeToSend($order);
+            if ($emailType) {
+                Log::info("Sending pending {$emailType} email for order {$order->id}");
+                self::send_mails($order);
+                $emailsSent++;
+            }
+        }
+        
+        Log::info("Manual email send completed. {$emailsSent} emails were sent.");
+        return $emailsSent;
     }
 
     private static function getPendingEmailContent($order, $customer)

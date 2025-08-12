@@ -10,6 +10,7 @@ use Encore\Admin\Controllers\AdminController;
 use Encore\Admin\Form;
 use Encore\Admin\Grid;
 use Encore\Admin\Show;
+use Illuminate\Support\Facades\Log;
 
 class OrderController extends AdminController
 {
@@ -188,9 +189,32 @@ class OrderController extends AdminController
                 2 => 'Completed',
                 3 => 'Canceled',
                 4 => 'Failed',
-            ]);
+            ])
+            ->default(0)
+            ->required();
 
-        $form->disableEditingCheck();
+        // Add custom saving hook to debug and ensure proper saving
+        $form->saving(function (Form $form) {
+            Log::info('Laravel Admin form saving order ' . $form->model()->id . ' with order_state: ' . request('order_state'));
+            
+            // Ensure order_state is properly set
+            if (request()->has('order_state')) {
+                $form->model()->order_state = (int) request('order_state');
+                Log::info('Manually setting order_state to: ' . $form->model()->order_state);
+            }
+        });
+
+        // Add saved hook to verify the save worked
+        $form->saved(function (Form $form) {
+            $order = $form->model();
+            Log::info('Laravel Admin form saved order ' . $order->id . ' - final order_state: ' . $order->order_state);
+            
+            // Force refresh from database to make sure it was saved
+            $order->refresh();
+            Log::info('After refresh, order_state is: ' . $order->order_state);
+        });
+
+        $form->disableCreatingCheck();
         $form->disableReset();
         $form->disableViewCheck();
 
