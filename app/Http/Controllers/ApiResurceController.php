@@ -883,8 +883,19 @@ class ApiResurceController extends Controller
         $order->save();
         $order = Order::find($order->id);
 
+        // Send response first
+        $response = $this->success($order, "Submitted successfully!");
+        
+        // After response is prepared, trigger email in background
+        register_shutdown_function(function() use ($order) {
+            try {
+                \App\Models\Order::send_mails($order);
+            } catch (\Throwable $th) {
+                Log::error('Background email error for order ' . $order->id . ': ' . $th->getMessage());
+            }
+        });
 
-        return $this->success($order, "Submitted successfully!");
+        return $response;
     }
 
 
@@ -980,7 +991,19 @@ class ApiResurceController extends Controller
         } */
         $order = Order::find($order->id);
 
-        return $this->success($order, "Submitted successfully!");
+        // Send response first
+        $response = $this->success($order, "Submitted successfully!");
+        
+        // After response is prepared, trigger email in background
+        register_shutdown_function(function() use ($order) {
+            try {
+                \App\Models\Order::send_mails($order);
+            } catch (\Throwable $th) {
+                Log::error('Background email error for order ' . $order->id . ': ' . $th->getMessage());
+            }
+        });
+
+        return $response;
     }
 
 

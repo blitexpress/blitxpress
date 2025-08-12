@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use Stripe\Customer;
 
 class Order extends Model
@@ -16,26 +17,14 @@ class Order extends Model
         parent::boot();
         //created
         self::created(function ($m) {
-            try {
-                // Send emails after response using dispatch
-                dispatch(function () use ($m) {
-                    self::send_mails($m);
-                })->afterResponse();
-            } catch (\Throwable $th) {
-                Log::error('Order created email error: ' . $th->getMessage());
-            }
+            // Don't execute any email code here - just log the event
+            Log::info('Order created: ' . $m->id . ' - Email will be sent separately');
         });
 
         //updated
         self::updated(function ($m) {
-            try {
-                // Send emails after response using dispatch
-                dispatch(function () use ($m) {
-                    self::send_mails($m);
-                })->afterResponse();
-            } catch (\Throwable $th) {
-                Log::error('Order updated email error: ' . $th->getMessage());
-            }
+            // Don't execute any email code here - just log the event  
+            Log::info('Order updated: ' . $m->id . ' - Email will be sent separately');
         });
 
 
@@ -52,198 +41,319 @@ class Order extends Model
     }
 
 
-      public static function send_mails($m)
+    public static function send_mails($m)
     {
         try {
-            // Wrap the entire method in a try-catch to prevent any uncaught errors
             $customer = User::find($m->user);
             if ($customer == null) {
-                Log::info('Order email not sent: Customer not found for order ' . $m->id);
+                Log::warning('Order email: Customer not found for order ID: ' . $m->id);
                 return;
             }
 
-            $mail_body_admin = "";
-            $mail_body_customer = "";
-            
-            try {
-                $review_url = admin_url('orders/' . $m->id . '/edit');
-            } catch (\Throwable $th) {
-                $review_url = "N/A";
-                Log::warning('Failed to generate admin URL for order ' . $m->id . ': ' . $th->getMessage());
-            }
-            
-            $order_items = [];
-            try {
-                $order_items = $m->get_items();
-            } catch (\Throwable $th) {
-                Log::error('Failed to get order items for order ' . $m->id . ': ' . $th->getMessage());
-                $order_items = [];
+            // Check what emails need to be sent based on order state and sent status
+            $emailType = self::getEmailTypeToSend($m);
+            if (!$emailType) {
+                Log::info('No email needed for order ' . $m->id . ' with state ' . $m->order_state);
+                return;
             }
 
-            // Build items list for email
-            $items_list = "";
-            $total_items = 0;
-            foreach ($order_items as $item) {
+            // Generate email content based on order state
+            $emailContent = self::generateEmailContent($m, $customer, $emailType);
+
+            if (!$emailContent) {
+                Log::warning('No email content generated for order ' . $m->id . ' type ' . $emailType);
+                return;
+            }
+
+            // Send customer email
+            if (!empty($customer->email) && filter_var($customer->email, FILTER_VALIDATE_EMAIL)) {
                 try {
-                    $items_list .= "• {$item->product_name} - Qty: {$item->product_quantity} - UGX " . number_format($item->product_price_1, 0) . "<br>";
-                    $total_items += $item->product_quantity;
+                    $customerData = [
+                        'body' => $emailContent['customer'],
+                        'data' => $emailContent['customer'],
+                        'name' => $customer->first_name . ' ' . $customer->last_name,
+                        'email' => $customer->email,
+                        'subject' => $emailContent['subject'],
+                        'view' => 'mail-1'
+                    ];
+
+                    set_time_limit(30);
+                    Utils::mail_sender($customerData);
+
+                    // Mark email as sent using direct DB update to avoid triggering hooks
+                    self::markEmailAsSent($m->id, $emailType);
+
+                    Log::info("Order {$emailType} email sent to customer for order " . $m->id);
                 } catch (\Throwable $th) {
-                    Log::warning('Error processing order item for order ' . $m->id . ': ' . $th->getMessage());
+                    Log::error('Failed to send customer email for order ' . $m->id . ': ' . $th->getMessage());
                 }
             }
 
-        if ($m->order_state == 0) {
-            // Admin email content
-            $mail_body_admin = <<<EOD
-        <h2 style="color: #d71529;">🛍️ New Order Received - BlitXpress</h2>
-        
-        <p>Dear Administrator,</p>
-        
-        <p>A new order has been successfully placed on BlitXpress. Please review the details below:</p>
-        
-        <div style="background-color: #f8f9fa; padding: 15px; border-left: 4px solid #d71529; margin: 20px 0;">
-            <h3 style="margin-top: 0; color: #333;">📋 Order Details</h3>
-            <p><strong>Order ID:</strong> #{$m->id}</p>
-            <p><strong>Order Status:</strong> <span style="color: #ffc107;">⏳ Pending</span></p>
-            <p><strong>Customer:</strong> {$customer->first_name} {$customer->last_name}</p>
-            <p><strong>Customer Email:</strong> {$customer->email}</p>
-            <p><strong>Customer Phone:</strong> {$customer->phone_number}</p>
-            <p><strong>Order Date:</strong> {$m->created_at->format('M d, Y h:i A')}</p>
-            <p><strong>Total Items:</strong> {$total_items}</p>
-            <p><strong>Total Amount:</strong> <span style="color: #28a745; font-size: 18px; font-weight: bold;">UGX " . number_format($m->total, 0) . "</span></p>
-        </div>
-        
-        <div style="background-color: #fff; padding: 15px; border: 1px solid #dee2e6; margin: 20px 0;">
-            <h3 style="color: #333;">📦 Ordered Items</h3>
-            {$items_list}
-        </div>
-        
-        <div style="text-align: center; margin: 30px 0;">
-            <a href="{$review_url}" style="background-color: #d71529; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">
-                🔍 Review Order in Admin Panel
-            </a>
-        </div>
-        
-        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-        
-        <p style="color: #666; font-size: 12px;">
-            <strong>Next Steps:</strong><br>
-            1. Review the order details in the admin panel<br>
-            2. Verify product availability<br>
-            3. Process the order and update the status<br>
-            4. Contact the customer if needed
-        </p>
-        
-        <p style="color: #999; font-size: 11px; margin-top: 30px;">
-            This is an automated notification from BlitXpress. Please do not reply to this email.
-        </p>
-        EOD;
-
-            // Customer email content
-            $mail_body_customer = <<<EOD
-        <h2 style="color: #d71529;">🎉 Order Confirmation - BlitXpress</h2>
-        
-        <p>Dear {$customer->first_name} {$customer->last_name},</p>
-        
-        <p>Thank you for choosing BlitXpress! We're excited to confirm that we've received your order.</p>
-        
-        <div style="background-color: #f8f9fa; padding: 15px; border-left: 4px solid #28a745; margin: 20px 0;">
-            <h3 style="margin-top: 0; color: #333;">📋 Your Order Summary</h3>
-            <p><strong>Order ID:</strong> #{$m->id}</p>
-            <p><strong>Order Status:</strong> <span style="color: #ffc107;">⏳ Processing</span></p>
-            <p><strong>Order Date:</strong> {$m->created_at->format('M d, Y h:i A')}</p>
-            <p><strong>Total Items:</strong> {$total_items}</p>
-            <p><strong>Total Amount:</strong> <span style="color: #28a745; font-size: 18px; font-weight: bold;">UGX " . number_format($m->total, 0) . "</span></p>
-        </div>
-        
-        <div style="background-color: #fff; padding: 15px; border: 1px solid #dee2e6; margin: 20px 0;">
-            <h3 style="color: #333;">📦 Items Ordered</h3>
-            {$items_list}
-        </div>
-        
-        <div style="background-color: #e7f3ff; padding: 15px; border-left: 4px solid #0066cc; margin: 20px 0;">
-            <h3 style="margin-top: 0; color: #0066cc;">📞 What Happens Next?</h3>
-            <p>• Our team will review and process your order within 24 hours</p>
-            <p>• We'll contact you via phone or email to confirm delivery details</p>
-            <p>• You'll receive tracking information once your order ships</p>
-            <p>• Expected processing time: 1-2 business days</p>
-        </div>
-        
-        <div style="background-color: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0;">
-            <h3 style="margin-top: 0; color: #856404;">📧 Contact Information</h3>
-            <p>If you have any questions about your order, please contact us:</p>
-            <p>📞 <strong>Phone:</strong> +256800200146</p>
-            <p>📧 <strong>Email:</strong> blitexpress@gmail.com</p>
-            <p>🌐 <strong>Website:</strong> www.blitxpress.com</p>
-        </div>
-        
-        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-        
-        <p style="color: #666; text-align: center;">
-            Thank you for shopping with BlitXpress! We appreciate your business.
-        </p>
-        
-        <p style="color: #999; font-size: 11px; margin-top: 30px; text-align: center;">
-            This is an automated confirmation email. Please save this email for your records.<br>
-            If you need immediate assistance, please contact our customer service team.
-        </p>
-        EOD;
-        }
-
-        // Send email to administrators with timeout protection
-        $admin_emails = [
-            'mubahood360@gmail.com',
-            // 'blitexpress@gmail.com',
-            'blitxpressonline@gmail.com',
-        ];
-
-        foreach ($admin_emails as $admin_email) {
-            try {
-                $admin_data = [
-                    'body' => $mail_body_admin,
-                    'data' => $mail_body_admin,
-                    'name' => 'BlitXpress Admin',
-                    'email' => $admin_email,
-                    'subject' => "🛍️ New Order #{$m->id} - BlitXpress",
-                    'view' => 'mail-1'
+            // Send admin notification only for new orders (pending state)
+            if ($emailType === 'pending') {
+                $adminEmails = [
+                    'mubahood360@gmail.com',
+                    'blitxpressonline@gmail.com',
                 ];
-                
-                // Set a timeout for email sending to prevent blocking
-                set_time_limit(30);
-                Utils::mail_sender($admin_data);
-            } catch (\Throwable $th) {
-                // Log error but don't break the process
-                Log::error('Failed to send admin email for order ' . $m->id . ' to ' . $admin_email . ': ' . $th->getMessage());
-            }
-        }
 
-        // Send email to customer (only if email is valid) with timeout protection
-        if ($customer->email && filter_var($customer->email, FILTER_VALIDATE_EMAIL)) {
-            try {
-                $customer_data = [
-                    'body' => $mail_body_customer,
-                    'data' => $mail_body_customer,
-                    'name' => $customer->first_name . ' ' . $customer->last_name,
-                    'email' => $customer->email,
-                    'subject' => "🎉 Order Confirmation #{$m->id} - BlitXpress",
-                    'view' => 'mail-1'
-                ];
-                
-                // Set a timeout for email sending to prevent blocking
-                set_time_limit(30);
-                Utils::mail_sender($customer_data);
-            } catch (\Throwable $th) {
-                // Log error but don't break the process
-                Log::error('Failed to send customer email for order ' . $m->id . ' to ' . $customer->email . ': ' . $th->getMessage());
+                foreach ($adminEmails as $adminEmail) {
+                    try {
+                        $adminData = [
+                            'body' => $emailContent['admin'],
+                            'data' => $emailContent['admin'],
+                            'name' => 'BlitXpress Admin',
+                            'email' => $adminEmail,
+                            'subject' => $emailContent['admin_subject'],
+                            'view' => 'mail-1'
+                        ];
+
+                        set_time_limit(30);
+                        Utils::mail_sender($adminData);
+                    } catch (\Throwable $th) {
+                        Log::error('Failed to send admin email for order ' . $m->id . ' to ' . $adminEmail . ': ' . $th->getMessage());
+                    }
+                }
             }
-        }
-        
         } catch (\Throwable $th) {
-            // Catch any unexpected errors in the entire email process
             Log::error('Critical error in send_mails for order ' . $m->id . ': ' . $th->getMessage());
-            Log::error('Stack trace: ' . $th->getTraceAsString());
         }
-    } 
+    }
+
+    /**
+     * Determine what type of email needs to be sent based on order state and sent status
+     */
+    private static function getEmailTypeToSend($order)
+    {
+        switch ($order->order_state) {
+            case 0: // Pending
+                return ($order->pending_mail_sent !== 'Yes') ? 'pending' : null;
+            case 1: // Processing 
+                return ($order->processing_mail_sent !== 'Yes') ? 'processing' : null;
+            case 2: // Completed
+                return ($order->completed_mail_sent !== 'Yes') ? 'completed' : null;
+            case 3: // Canceled
+                return ($order->canceled_mail_sent !== 'Yes') ? 'canceled' : null;
+            case 4: // Failed
+                return ($order->failed_mail_sent !== 'Yes') ? 'failed' : null;
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * Generate professional email content based on order state
+     */
+    private static function generateEmailContent($order, $customer, $emailType)
+    {
+        $content = [];
+
+        switch ($emailType) {
+            case 'pending':
+                $content['subject'] = "Order Confirmation #" . $order->id . " - BlitXpress";
+                $content['customer'] = self::getPendingEmailContent($order, $customer);
+                $content['admin_subject'] = "New Order #" . $order->id . " - BlitXpress";
+                $content['admin'] = self::getAdminEmailContent($order, $customer);
+                break;
+
+            case 'processing':
+                $content['subject'] = "Order #" . $order->id . " is Being Processed - BlitXpress";
+                $content['customer'] = self::getProcessingEmailContent($order, $customer);
+                break;
+
+            case 'completed':
+                $content['subject'] = "Order #" . $order->id . " Delivered - BlitXpress";
+                $content['customer'] = self::getCompletedEmailContent($order, $customer);
+                break;
+
+            case 'canceled':
+                $content['subject'] = "Order #" . $order->id . " Canceled - BlitXpress";
+                $content['customer'] = self::getCanceledEmailContent($order, $customer);
+                break;
+
+            case 'failed':
+                $content['subject'] = "Order #" . $order->id . " Issue - BlitXpress";
+                $content['customer'] = self::getFailedEmailContent($order, $customer);
+                break;
+
+            default:
+                return null;
+        }
+
+        return $content;
+    }
+
+    /**
+     * Mark email as sent using direct DB update to avoid triggering model events
+     */
+    private static function markEmailAsSent($orderId, $emailType)
+    {
+        $field = $emailType . '_mail_sent';
+        DB::table('orders')->where('id', $orderId)->update([$field => 'Yes']);
+    }
+
+    private static function getPendingEmailContent($order, $customer)
+    {
+        return <<<EOD
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <h2 style="color: #333; border-bottom: 2px solid #e9ecef; padding-bottom: 10px;">Order Confirmation</h2>
+    
+    <p>Dear {$customer->first_name} {$customer->last_name},</p>
+    
+    <p>Thank you for your order. We have received your order and it is being reviewed.</p>
+    
+    <div style="background-color: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 5px;">
+        <h3 style="margin-top: 0; color: #333;">Order Details</h3>
+        <p><strong>Order ID:</strong> #{$order->id}</p>
+        <p><strong>Status:</strong> Pending Review</p>
+        <p><strong>Order Date:</strong> {$order->created_at->format('M d, Y')}</p>
+    </div>
+    
+    <p>We will contact you shortly to confirm your order details and arrange delivery.</p>
+    
+    <p>If you have any questions, please contact us at:</p>
+    <p>Phone: +256800200146<br>Email: blitexpress@gmail.com</p>
+    
+    <p>Best regards,<br>BlitXpress Team</p>
+</div>
+EOD;
+    }
+
+    private static function getProcessingEmailContent($order, $customer)
+    {
+        return <<<EOD
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <h2 style="color: #333; border-bottom: 2px solid #e9ecef; padding-bottom: 10px;">Order Update</h2>
+    
+    <p>Dear {$customer->first_name} {$customer->last_name},</p>
+    
+    <p>Good news! Your order is now being processed and prepared for delivery.</p>
+    
+    <div style="background-color: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 5px;">
+        <h3 style="margin-top: 0; color: #333;">Order Details</h3>
+        <p><strong>Order ID:</strong> #{$order->id}</p>
+        <p><strong>Status:</strong> Being Processed</p>
+        <p><strong>Expected Delivery:</strong> 1-2 business days</p>
+    </div>
+    
+    <p>We will notify you when your order is ready for delivery.</p>
+    
+    <p>If you have any questions, please contact us at:</p>
+    <p>Phone: +256800200146<br>Email: blitexpress@gmail.com</p>
+    
+    <p>Best regards,<br>BlitXpress Team</p>
+</div>
+EOD;
+    }
+
+    private static function getCompletedEmailContent($order, $customer)
+    {
+        return <<<EOD
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <h2 style="color: #333; border-bottom: 2px solid #e9ecef; padding-bottom: 10px;">Order Delivered</h2>
+    
+    <p>Dear {$customer->first_name} {$customer->last_name},</p>
+    
+    <p>Your order has been successfully delivered. We hope you are satisfied with your purchase.</p>
+    
+    <div style="background-color: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 5px;">
+        <h3 style="margin-top: 0; color: #333;">Order Details</h3>
+        <p><strong>Order ID:</strong> #{$order->id}</p>
+        <p><strong>Status:</strong> Delivered</p>
+        <p><strong>Delivery Date:</strong> {$order->updated_at->format('M d, Y')}</p>
+    </div>
+    
+    <p>Thank you for choosing BlitXpress. We appreciate your business and look forward to serving you again.</p>
+    
+    <p>If you have any feedback or questions, please contact us at:</p>
+    <p>Phone: +256800200146<br>Email: blitexpress@gmail.com</p>
+    
+    <p>Best regards,<br>BlitXpress Team</p>
+</div>
+EOD;
+    }
+
+    private static function getCanceledEmailContent($order, $customer)
+    {
+        return <<<EOD
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <h2 style="color: #333; border-bottom: 2px solid #e9ecef; padding-bottom: 10px;">Order Canceled</h2>
+    
+    <p>Dear {$customer->first_name} {$customer->last_name},</p>
+    
+    <p>We regret to inform you that your order has been canceled.</p>
+    
+    <div style="background-color: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 5px;">
+        <h3 style="margin-top: 0; color: #333;">Order Details</h3>
+        <p><strong>Order ID:</strong> #{$order->id}</p>
+        <p><strong>Status:</strong> Canceled</p>
+        <p><strong>Cancellation Date:</strong> {$order->updated_at->format('M d, Y')}</p>
+    </div>
+    
+    <p>If you have any questions about this cancellation or would like to place a new order, please contact us.</p>
+    
+    <p>Contact us at:</p>
+    <p>Phone: +256800200146<br>Email: blitexpress@gmail.com</p>
+    
+    <p>We apologize for any inconvenience caused.</p>
+    
+    <p>Best regards,<br>BlitXpress Team</p>
+</div>
+EOD;
+    }
+
+    private static function getFailedEmailContent($order, $customer)
+    {
+        return <<<EOD
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <h2 style="color: #333; border-bottom: 2px solid #e9ecef; padding-bottom: 10px;">Order Issue</h2>
+    
+    <p>Dear {$customer->first_name} {$customer->last_name},</p>
+    
+    <p>We encountered an issue with your order and need to contact you to resolve it.</p>
+    
+    <div style="background-color: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 5px;">
+        <h3 style="margin-top: 0; color: #333;">Order Details</h3>
+        <p><strong>Order ID:</strong> #{$order->id}</p>
+        <p><strong>Status:</strong> Requires Attention</p>
+        <p><strong>Date:</strong> {$order->updated_at->format('M d, Y')}</p>
+    </div>
+    
+    <p>Please contact us as soon as possible so we can resolve this issue and proceed with your order.</p>
+    
+    <p>Contact us at:</p>
+    <p>Phone: +256800200146<br>Email: blitexpress@gmail.com</p>
+    
+    <p>We apologize for any inconvenience and appreciate your patience.</p>
+    
+    <p>Best regards,<br>BlitXpress Team</p>
+</div>
+EOD;
+    }
+
+    private static function getAdminEmailContent($order, $customer)
+    {
+        $review_url = admin_url('orders/' . $order->id);
+        return <<<EOD
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <h2 style="color: #333; border-bottom: 2px solid #e9ecef; padding-bottom: 10px;">New Order Received</h2>
+    
+    <p>A new order has been placed and requires review.</p>
+    
+    <div style="background-color: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 5px;">
+        <h3 style="margin-top: 0; color: #333;">Order Information</h3>
+        <p><strong>Order ID:</strong> #{$order->id}</p>
+        <p><strong>Customer:</strong> {$customer->first_name} {$customer->last_name}</p>
+        <p><strong>Email:</strong> {$customer->email}</p>
+        <p><strong>Phone:</strong> {$customer->phone_number}</p>
+        <p><strong>Order Date:</strong> {$order->created_at->format('M d, Y h:i A')}</p>
+    </div>
+
+    <p><a href="' . $review_url . '" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Review Order</a></p>
+
+    <p>BlitXpress Admin System</p>
+</div>
+EOD;
+    }
 
 
     public function create_payment_link()
