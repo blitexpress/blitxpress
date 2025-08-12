@@ -17,14 +17,20 @@ class Order extends Model
         parent::boot();
         //created
         self::created(function ($m) {
-            // Don't execute any email code here - just log the event
-            Log::info('Order created: ' . $m->id . ' - Email will be sent separately');
+            // Send pending email for new orders
+            Log::info('Order created: ' . $m->id . ' - Sending pending email');
+            register_shutdown_function(function() use ($m) {
+                self::send_mails($m);
+            });
         });
 
         //updated
         self::updated(function ($m) {
-            // Don't execute any email code here - just log the event  
-            Log::info('Order updated: ' . $m->id . ' - Email will be sent separately');
+            // Send status-based emails when order is updated
+            Log::info('Order updated: ' . $m->id . ' with state: ' . $m->order_state . ' - Checking for emails to send');
+            register_shutdown_function(function() use ($m) {
+                self::send_mails($m);
+            });
         });
 
 
