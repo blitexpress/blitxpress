@@ -79,6 +79,18 @@ class ProductController extends AdminController
                 return $c ? $c->category : 'Deleted';
             })
             ->sortable();
+        //home_section_1 editable col
+        $grid->column('home_section_1', __('Home Section 1'))
+            ->editable('select', ['Yes' => 'Yes', 'No' => 'No'])
+            ->sortable();
+
+        $grid->column('home_section_2', __('Home Section 2'))
+            ->editable('select', ['Yes' => 'Yes', 'No' => 'No'])
+            ->sortable();
+
+        $grid->column('home_section_3', __('Home Section 3'))
+            ->editable('select', ['Yes' => 'Yes', 'No' => 'No'])
+            ->sortable();
 
         $grid->column('created_at', __('Created'))
             ->display(function ($created_at) {
