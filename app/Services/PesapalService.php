@@ -132,20 +132,24 @@ class PesapalService
         // Generate unique merchant reference
         $merchantReference = 'ORDER_' . $order->id . '_' . time();
 
+        // Validate amount for current environment
+        $amount = (float) $order->order_total;
+        \App\Config\PesapalProductionConfig::validateTransactionAmount($amount);
+
         try {
             $token = $this->getAuthToken();
 
             $payload = [
                 'id' => $merchantReference,
-                'currency' => 'UGX', // Default to UGX, can be made configurable
-                'amount' => (float) $order->order_total,
+                'currency' => \App\Config\PesapalProductionConfig::getCurrency(),
+                'amount' => $amount,
                 'description' => 'Order #' . $order->id . ' payment',
                 'callback_url' => $callbackUrl,
                 'notification_id' => $notificationId,
                 'billing_address' => [
                     'email_address' => $order->mail ?: ($order->customer->email ?? ''),
                     'phone_number' => $order->customer_phone_number_1 ?: ($order->customer->phone_number ?? ''),
-                    'country_code' => 'UG', // Default to Uganda
+                    'country_code' => \App\Config\PesapalProductionConfig::getCountryCode(),
                     'first_name' => $order->customer_name ?: ($order->customer->first_name ?? ''),
                     'last_name' => $order->customer->last_name ?? '',
                     'line_1' => $order->customer_address ?: '',
@@ -166,13 +170,21 @@ class PesapalService
             if ($response->successful()) {
                 $data = $response->json();
                 
+                Log::info('Pesapal: Raw response received', ['data' => $data]);
+                
+                // Check if required fields exist in response
+                if (!isset($data['order_tracking_id']) || !isset($data['redirect_url'])) {
+                    Log::error('Pesapal: Missing required fields in response', ['data' => $data]);
+                    throw new \Exception('Invalid response from Pesapal: Missing order_tracking_id or redirect_url');
+                }
+                
                 // Create transaction record
                 $transaction = PesapalTransaction::create([
                     'order_id' => $order->id,
                     'order_tracking_id' => $data['order_tracking_id'],
                     'merchant_reference' => $merchantReference,
                     'amount' => $order->order_total,
-                    'currency' => 'UGX',
+                    'currency' => \App\Config\PesapalProductionConfig::getCurrency(),
                     'status' => 'PENDING',
                     'redirect_url' => $data['redirect_url'],
                     'callback_url' => $callbackUrl,
