@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\ApiAuthController;
 use App\Http\Controllers\ApiResurceController;
+use App\Http\Controllers\PesapalController;
+use App\Http\Controllers\PesapalAdminController;
 use App\Http\Middleware\EnsureTokenIsValid;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -26,6 +28,7 @@ Route::post("post-media-upload", [ApiResurceController::class, 'upload_media']);
 Route::post("cancel-order", [ApiResurceController::class, "orders_cancel"]);
 Route::post("orders", [ApiResurceController::class, "orders_submit"]);
 Route::post("orders-create", [ApiResurceController::class, "orders_create"]);
+Route::post("orders-with-payment", [ApiResurceController::class, "orders_with_payment"]);
 Route::post("product-create", [ApiResurceController::class, "product_create"]);
 Route::get("orders", [ApiResurceController::class, "orders_get"]);
 Route::get("orders/{id}", [ApiResurceController::class, "orders_get_by_id"]);
@@ -70,6 +73,27 @@ Route::prefix('reviews')->group(function () {
         Route::put('/{review}', [ReviewController::class, 'update']); // Update review
         Route::delete('/{review}', [ReviewController::class, 'destroy']); // Delete review
     });
+});
+
+// Pesapal Payment Gateway Routes
+Route::prefix('pesapal')->group(function () {
+    Route::post('/initialize', [PesapalController::class, 'initialize']);
+    Route::get('/callback', [PesapalController::class, 'callback']);
+    Route::post('/callback', [PesapalController::class, 'callback']); // Support both GET and POST callbacks
+    Route::post('/ipn', [PesapalController::class, 'ipn'])->middleware('verify.pesapal.webhook');
+    Route::get('/status/{orderId}', [PesapalController::class, 'status']);
+    Route::post('/register-ipn', [PesapalController::class, 'registerIpn']);
+    Route::get('/config', [PesapalController::class, 'config']); // New: Configuration endpoint
+    Route::post('/test', [PesapalController::class, 'test']); // New: Test connectivity
+});
+
+// Pesapal Admin Routes (require authentication)
+Route::prefix('admin/pesapal')->middleware(EnsureTokenIsValid::class)->group(function () {
+    Route::get('/analytics', [PesapalAdminController::class, 'analytics']);
+    Route::get('/transaction/{id}', [PesapalAdminController::class, 'transactionDetails']);
+    Route::get('/failed-transactions', [PesapalAdminController::class, 'failedTransactions']);
+    Route::post('/retry/{id}', [PesapalAdminController::class, 'retryTransaction']);
+    Route::get('/export', [PesapalAdminController::class, 'exportTransactions']);
 });
 
 Route::get('api/{model}', [ApiResurceController::class, 'index']);

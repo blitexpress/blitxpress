@@ -37,7 +37,16 @@ class Order extends Model
         'items',
         'phone_number_2',
         'phone_number_1',
-        'phone_number'
+        'phone_number',
+        // Pesapal fields
+        'payment_gateway',
+        'pesapal_order_tracking_id',
+        'pesapal_merchant_reference',
+        'pesapal_status',
+        'pesapal_payment_method',
+        'pesapal_redirect_url',
+        'payment_status',
+        'payment_completed_at'
     ];
     
     //boot
@@ -511,6 +520,41 @@ EOD;
     public function customer()
     {
         return $this->belongsTo(User::class, 'user');
+    }
+
+    /**
+     * Get Pesapal transactions for this order
+     */
+    public function pesapalTransactions()
+    {
+        return $this->hasMany(PesapalTransaction::class, 'order_id', 'id');
+    }
+
+    /**
+     * Get the latest Pesapal transaction for this order
+     */
+    public function latestPesapalTransaction()
+    {
+        return $this->hasOne(PesapalTransaction::class, 'order_id', 'id')->latest();
+    }
+
+    /**
+     * Check if order is paid
+     */
+    public function isPaid()
+    {
+        return $this->payment_status === 'PAID' || 
+               $this->pesapal_status === 'COMPLETED' ||
+               (!empty($this->stripe_paid) && $this->stripe_paid !== 'No');
+    }
+
+    /**
+     * Check if order is pending payment
+     */
+    public function isPendingPayment()
+    {
+        return $this->payment_status === 'PENDING_PAYMENT' || 
+               (empty($this->payment_status) && empty($this->stripe_paid));
     }
 
     //get payment link

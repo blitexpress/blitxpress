@@ -27,6 +27,7 @@ use App\Models\SearchHistory;
 use App\Models\ServiceProvider;
 use App\Models\User;
 use App\Models\Utils;
+use App\Services\PesapalService;
 use App\Traits\ApiResponser;
 use Carbon\Carbon;
 use Encore\Admin\Auth\Database\Administrator;
@@ -829,6 +830,8 @@ class ApiResurceController extends Controller
         $order->amount = 0;
         $order->order_total = 0;
         $order->payment_confirmation = '';
+        $order->payment_gateway = 'manual'; // Default payment gateway for existing method
+        $order->payment_status = 'PENDING_PAYMENT';
         $order->description = '';
         $order->mail = $u->email;
         $delivery_amount = 0;
@@ -946,6 +949,8 @@ class ApiResurceController extends Controller
         $order->amount = 0;
         $order->order_total = 0;
         $order->payment_confirmation = '';
+        $order->payment_gateway = 'manual'; // Default payment gateway for existing method
+        $order->payment_status = 'PENDING_PAYMENT';
         $order->description = '';
         $order->mail = $u->email;
         $order->date_created = Carbon::now();
@@ -1006,6 +1011,203 @@ class ApiResurceController extends Controller
         return $response;
     }
 
+    /**
+     * Create order with Pesapal payment integration
+     * POST /api/orders-with-payment
+     */
+    public function orders_with_payment(Request $r)
+    {
+        $u = auth('api')->user();
+        if ($u == null) {
+            $administrator_id = Utils::get_user_id($r);
+            $u = Administrator::find($administrator_id);
+        }
+
+        if ($u == null) {
+            return $this->error('User not found.');
+        }
+
+        $items = [];
+        try {
+            $items = json_decode($r->items);
+        } catch (\Throwable $th) {
+            $items = [];
+        }
+
+        if (empty($items)) {
+            return $this->error('Order items are required.');
+        }
+
+        foreach ($items as $key => $value) {
+            $p = Product::find($value->product_id);
+            if ($p == null) {
+                return $this->error("Product #" . $value->product_id . " not found.");
+            }
+        }
+
+        $delivery = null;
+        try {
+            $delivery = json_decode($r->delivery);
+        } catch (\Throwable $th) {
+            $delivery = null;
+        }
+
+        if ($delivery == null) {
+            return $this->error('Delivery information is missing.');
+        }
+        if ($delivery->phone_number == null) {
+            return $this->error('Phone number is missing.');
+        }
+
+        // Validate payment gateway selection
+        $paymentGateway = $r->payment_gateway ?? 'pesapal';
+        if (!in_array($paymentGateway, ['pesapal', 'stripe', 'manual'])) {
+            return $this->error('Invalid payment gateway. Supported: pesapal, stripe, manual.');
+        }
+
+        // Create the order
+        $order = new Order();
+        $order->user = $u->id;
+        $order->order_state = 0;
+        $order->temporary_id = 0;
+        $order->amount = 0;
+        $order->order_total = 0;
+        $order->payment_confirmation = '';
+        $order->payment_gateway = $paymentGateway;
+        $order->payment_status = 'PENDING_PAYMENT';
+        $order->description = '';
+        $order->mail = $u->email;
+        $order->date_created = Carbon::now();
+        $order->date_updated = Carbon::now();
+        
+        if ($delivery != null) {
+            try {
+                $order->customer_phone_number_1 = $delivery->phone_number;
+                $order->customer_phone_number_2 = $delivery->phone_number_2 ?? '';
+                $order->customer_name = $delivery->first_name . " " . $delivery->last_name;
+                $order->customer_address = $delivery->current_address;
+                $order->delivery_district = $delivery->current_address;
+                $order->order_details = json_encode($delivery);
+            } catch (\Throwable $th) {
+                Log::error('Error processing delivery details: ' . $th->getMessage());
+            }
+        }
+
+        $order->save();
+
+        // Add order items and calculate total
+        $order_total = 0;
+        foreach ($items as $key => $item) {
+            $product = Product::find($item->product_id);
+            if ($product == null) {
+                return $this->error("Product #" . $item->product_id . " not found.");
+            }
+            $oi = new OrderedItem();
+            $oi->order = $order->id;
+            $oi->product = $item->product_id;
+            $oi->qty = $item->product_quantity;
+            $oi->amount = $product->price_1;
+            $oi->color = $item->color ?? '';
+            $oi->size = $item->size ?? '';
+            $order_total += ($product->price_1 * $oi->qty);
+            $oi->save();
+        }
+
+        // Add delivery cost if applicable
+        $delivery_amount = 0;
+        if (isset($delivery->delivery_district)) {
+            $del_loc = DeliveryAddress::find($delivery->delivery_district);
+            if ($del_loc != null) {
+                $delivery_amount = (int)($del_loc->shipping_cost);
+            }
+        }
+
+        $order->order_total = $order_total + $delivery_amount;
+        $order->amount = $order->order_total;
+        $order->save();
+
+        // Initialize payment based on gateway selection
+        $paymentData = null;
+        try {
+            if ($paymentGateway === 'pesapal') {
+                $pesapalService = app(PesapalService::class);
+                $callbackUrl = $r->callback_url ?? url("/api/pesapal/callback");
+                
+                // Get or register IPN URL
+                $notificationId = $r->notification_id;
+                if (!$notificationId) {
+                    $ipnResponse = $pesapalService->registerIpnUrl();
+                    $notificationId = $ipnResponse['ipn_id'] ?? null;
+                    
+                    if (!$notificationId) {
+                        throw new \Exception('Failed to register IPN URL with Pesapal');
+                    }
+                }
+
+                // Submit order to Pesapal
+                $pesapalResponse = $pesapalService->submitOrderRequest(
+                    $order, 
+                    $notificationId, 
+                    $callbackUrl
+                );
+
+                $paymentData = [
+                    'payment_gateway' => 'pesapal',
+                    'order_tracking_id' => $pesapalResponse['order_tracking_id'],
+                    'merchant_reference' => $pesapalResponse['merchant_reference'],
+                    'redirect_url' => $pesapalResponse['redirect_url'],
+                    'status' => $pesapalResponse['status'] ?? '200'
+                ];
+
+            } elseif ($paymentGateway === 'stripe') {
+                // Future: Implement Stripe integration
+                $paymentData = [
+                    'payment_gateway' => 'stripe',
+                    'message' => 'Stripe integration not yet implemented',
+                    'status' => 'pending'
+                ];
+
+            } else {
+                // Manual payment
+                $paymentData = [
+                    'payment_gateway' => 'manual',
+                    'message' => 'Manual payment selected. Please contact support for payment instructions.',
+                    'status' => 'pending'
+                ];
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Payment initialization failed for order ' . $order->id, [
+                'error' => $e->getMessage(),
+                'payment_gateway' => $paymentGateway
+            ]);
+
+            return $this->error('Payment initialization failed: ' . $e->getMessage());
+        }
+
+        // Refresh order data
+        $order = Order::find($order->id);
+
+        // Prepare response
+        $responseData = [
+            'order' => $order,
+            'payment' => $paymentData
+        ];
+
+        // Send response first
+        $response = $this->success($responseData, "Order created and payment initialized successfully!");
+        
+        // After response is prepared, trigger email in background
+        register_shutdown_function(function() use ($order) {
+            try {
+                \App\Models\Order::send_mails($order);
+            } catch (\Throwable $th) {
+                Log::error('Background email error for order ' . $order->id . ': ' . $th->getMessage());
+            }
+        });
+
+        return $response;
+    }
 
 
     public function product_create(Request $r)
