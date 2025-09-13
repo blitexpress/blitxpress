@@ -136,4 +136,53 @@ class PesapalProductionConfig
             ]
         ];
     }
+
+    /**
+     * Get API credentials for centralized client
+     * Compatible with PesapalApiClient requirements
+     */
+    public static function getApiCredentials(): array
+    {
+        return [
+            'consumer_key' => config('services.pesapal.consumer_key', env('PESAPAL_CONSUMER_KEY', '')),
+            'consumer_secret' => config('services.pesapal.consumer_secret', env('PESAPAL_CONSUMER_SECRET', '')),
+            'environment' => self::isProduction() ? 'production' : 'sandbox',
+            'base_url' => self::isProduction() 
+                ? 'https://pay.pesapal.com/v3/api'
+                : 'https://cybqa.pesapal.com/pesapalv3/api',
+            'ipn_url' => config('services.pesapal.ipn_url', env('PESAPAL_IPN_URL', url('/api/pesapal/ipn'))),
+            'callback_url' => config('services.pesapal.callback_url', env('PESAPAL_CALLBACK_URL', url('/payment-callback')))
+        ];
+    }
+
+    /**
+     * Validate configuration for centralized API client
+     */
+    public static function validateConfiguration(): array
+    {
+        $credentials = self::getApiCredentials();
+        $issues = [];
+
+        if (empty($credentials['consumer_key'])) {
+            $issues[] = 'Missing PESAPAL_CONSUMER_KEY';
+        }
+
+        if (empty($credentials['consumer_secret'])) {
+            $issues[] = 'Missing PESAPAL_CONSUMER_SECRET';
+        }
+
+        if (empty($credentials['ipn_url'])) {
+            $issues[] = 'Missing PESAPAL_IPN_URL';
+        }
+
+        if (empty($credentials['callback_url'])) {
+            $issues[] = 'Missing PESAPAL_CALLBACK_URL';
+        }
+
+        return [
+            'valid' => empty($issues),
+            'issues' => $issues,
+            'credentials' => $credentials
+        ];
+    }
 }

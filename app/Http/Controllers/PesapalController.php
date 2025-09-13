@@ -34,9 +34,10 @@ class PesapalController extends Controller
 
             if ($validator->fails()) {
                 return response()->json([
-                    'success' => false,
+                    'code' => 0,
+                    'status' => 400,
                     'message' => 'Validation failed',
-                    'errors' => $validator->errors()
+                    'data' => $validator->errors()
                 ], 400);
             }
 
@@ -45,7 +46,8 @@ class PesapalController extends Controller
             // Check if order is already paid
             if ($order->isPaid()) {
                 return response()->json([
-                    'success' => false,
+                    'code' => 0,
+                    'status' => 400,
                     'message' => 'Order is already paid',
                     'data' => null
                 ], 400);
@@ -70,7 +72,8 @@ class PesapalController extends Controller
             );
 
             return response()->json([
-                'success' => true,
+                'code' => 1,
+                'status' => 200,
                 'message' => 'Payment initialized successfully',
                 'data' => [
                     'order_tracking_id' => $response['order_tracking_id'],
@@ -87,7 +90,8 @@ class PesapalController extends Controller
             ]);
 
             return response()->json([
-                'success' => false,
+                'code' => 0,
+                'status' => 500,
                 'message' => 'Payment initialization failed: ' . $e->getMessage(),
                 'data' => null
             ], 500);
@@ -271,7 +275,8 @@ class PesapalController extends Controller
             
             if (!$order) {
                 return response()->json([
-                    'success' => false,
+                    'code' => 0,
+                    'status' => 404,
                     'message' => 'Order not found',
                     'data' => null
                 ], 404);
@@ -281,7 +286,8 @@ class PesapalController extends Controller
             
             if (!$transaction) {
                 return response()->json([
-                    'success' => true,
+                    'code' => 1,
+                    'status' => 200,
                     'message' => 'No Pesapal transaction found for this order',
                     'data' => [
                         'order_id' => $order->id,
@@ -303,7 +309,8 @@ class PesapalController extends Controller
             }
 
             return response()->json([
-                'success' => true,
+                'code' => 1,
+                'status' => 200,
                 'message' => 'Status retrieved successfully',
                 'data' => [
                     'order_id' => $order->id,
@@ -330,7 +337,8 @@ class PesapalController extends Controller
             ]);
 
             return response()->json([
-                'success' => false,
+                'code' => 0,
+                'status' => 500,
                 'message' => 'Status check failed: ' . $e->getMessage(),
                 'data' => null
             ], 500);

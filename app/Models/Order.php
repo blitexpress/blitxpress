@@ -56,10 +56,10 @@ class Order extends Model
         //created
         self::created(function ($m) {
             // Send pending email for new orders
-            Log::info('Order created: ' . $m->id . ' - Sending pending email');
+            /* Log::info('Order created: ' . $m->id . ' - Sending pending email');
             register_shutdown_function(function() use ($m) {
                 self::send_mails($m);
-            });
+            }); */
         });
 
         //updated
@@ -87,6 +87,7 @@ class Order extends Model
 
     public static function send_mails($m)
     {
+        return;
         try {
             Log::info("Checking emails for order {$m->id} with state {$m->order_state}");
             

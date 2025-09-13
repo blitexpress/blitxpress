@@ -270,6 +270,21 @@
             box-shadow: 0 0 0 3px rgb(99 102 241 / 0.1);
         }
 
+        /* Input Groups */
+        .input-group {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .input-group .form-input {
+            flex: 1;
+        }
+
+        .input-group .btn {
+            white-space: nowrap;
+        }
+
         /* Recent Transactions */
         .transactions-section {
             background: var(--bg-primary);
@@ -346,6 +361,27 @@
             padding: 0.75rem 1rem;
             font-weight: 500;
             border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Specific styling for response status */
+        #response-status {
+            font-weight: bold;
+            font-size: 0.95rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+        }
+
+        #response-status.text-success {
+            color: var(--success-color) !important;
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        #response-status.text-error {
+            color: var(--error-color) !important;
+            background: rgba(239, 68, 68, 0.1);
         }
 
         .response-body {
@@ -360,6 +396,66 @@
         .json-viewer {
             white-space: pre-wrap;
             word-break: break-all;
+        }
+
+        /* Key Information Panel */
+        .key-info-panel {
+            background: linear-gradient(135deg, var(--success-color), var(--info-color));
+            background: rgb(16 185 129 / 0.05);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem;
+        }
+
+        .key-info-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .key-info-panel h4 {
+            margin: 0;
+            color: var(--success-color);
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .key-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 0.75rem;
+        }
+
+        .key-info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .key-info-item label {
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+        }
+
+        .key-value {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            padding: 0.25rem 0.5rem;
+            background: var(--bg-primary);
+            border-radius: 0.375rem;
+            border: 1px solid var(--border-color);
+            word-break: break-all;
+        }
+
+        .key-value.highlight {
+            background: var(--success-color);
+            color: white;
+            border-color: var(--success-color);
         }
 
         /* Loading States */
@@ -416,9 +512,9 @@
         }
 
         /* Color Variants */
-        .text-success { color: var(--success-color); }
-        .text-warning { color: var(--warning-color); }
-        .text-error { color: var(--error-color); }
+        .text-success { color: var(--success-color) !important; }
+        .text-warning { color: var(--warning-color) !important; }
+        .text-error { color: var(--error-color) !important; }
         .text-info { color: var(--info-color); }
 
         .bg-success { background: var(--success-color); }
@@ -832,6 +928,16 @@
                         <small class="text-secondary">Unique reference for this transaction</small>
                     </div>
                     
+                    <div class="form-group">
+                        <label class="form-label">🔍 Order Tracking ID</label>
+                        <div class="input-group">
+                            <input type="text" class="form-input" name="order_tracking_id" placeholder="Enter existing order tracking ID (optional)">
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="clearTrackingId()">Clear</button>
+                        </div>
+                        <small class="text-info">💡 Use this to check status of existing payment or leave blank for new payment</small>
+                        <small class="text-secondary">🎯 Tip: Click on tracking ID in response panel to auto-populate this field</small>
+                    </div>
+                    
                     <!-- API Configuration Fields -->
                     <div class="form-group">
                         <label class="form-label">🔄 Callback URL</label>
@@ -1006,6 +1112,39 @@
                 <span id="response-title">Response</span>
                 <span id="response-status"></span>
             </div>
+            
+            <!-- Key Information Panel -->
+            <div id="key-info-panel" class="key-info-panel hidden">
+                <div class="key-info-header">
+                    <h4>🔑 Key Information</h4>
+                    <button id="check-status-btn" class="btn btn-sm btn-primary hidden" onclick="checkCurrentTransactionStatus()">
+                        <i class="fas fa-sync"></i> Check Status
+                    </button>
+                </div>
+                <div class="key-info-grid">
+                    <div class="key-info-item">
+                        <label>Order Tracking ID:</label>
+                        <span id="key-tracking-id" class="key-value">-</span>
+                    </div>
+                    <div class="key-info-item">
+                        <label>Merchant Reference:</label>
+                        <span id="key-merchant-ref" class="key-value">-</span>
+                    </div>
+                    <div class="key-info-item">
+                        <label>Amount:</label>
+                        <span id="key-amount" class="key-value">-</span>
+                    </div>
+                    <div class="key-info-item">
+                        <label>Redirect URL:</label>
+                        <span id="key-redirect-url" class="key-value">-</span>
+                    </div>
+                    <div class="key-info-item">
+                        <label>Response Time:</label>
+                        <span id="key-response-time" class="key-value">-</span>
+                    </div>
+                </div>
+            </div>
+            
             <div class="response-body">
                 <pre id="response-content" class="json-viewer"></pre>
             </div>
@@ -1243,11 +1382,72 @@
             const titleEl = document.getElementById('response-title');
             const statusEl = document.getElementById('response-status');
             const contentEl = document.getElementById('response-content');
+            const keyInfoPanel = document.getElementById('key-info-panel');
             
             titleEl.textContent = title;
             statusEl.textContent = isSuccess ? '✅ Success' : '❌ Error';
-            statusEl.className = isSuccess ? 'text-success' : 'text-error';
-            contentEl.textContent = JSON.stringify(data, null, 2);
+            
+            // Clear all previous classes and set the correct one
+            statusEl.className = '';
+            statusEl.classList.add(isSuccess ? 'text-success' : 'text-error');
+            
+            // Add additional styling for better visibility
+            statusEl.style.fontWeight = 'bold';
+            statusEl.style.fontSize = '0.95rem';
+            
+            // Debug logging
+            console.log('🎨 Status styling applied:', {
+                isSuccess: isSuccess,
+                className: statusEl.className,
+                textContent: statusEl.textContent,
+                computedColor: window.getComputedStyle(statusEl).color
+            });
+            
+            // Populate key information panel if it's a successful payment response
+            if (isSuccess && data && data.data && data.data.order_tracking_id) {
+                keyInfoPanel.classList.remove('hidden');
+                
+                // Store the tracking ID for status checking
+                window.currentTrackingId = data.data.order_tracking_id;
+                
+                // Show the check status button
+                document.getElementById('check-status-btn').classList.remove('hidden');
+                
+                // Populate key values
+                document.getElementById('key-tracking-id').textContent = data.data.order_tracking_id || 'N/A';
+                document.getElementById('key-merchant-ref').textContent = data.data.test_info?.test_id || data.data.test_data?.merchant_reference || 'N/A';
+                document.getElementById('key-amount').textContent = `${data.data.test_data?.amount || 'N/A'} ${data.data.test_data?.currency || 'UGX'}`;
+                document.getElementById('key-redirect-url').textContent = data.data.redirect_url || 'N/A';
+                document.getElementById('key-response-time').textContent = data.data.test_info?.response_time || 'N/A';
+                
+                // Highlight the tracking ID
+                document.getElementById('key-tracking-id').classList.add('highlight');
+                
+                // Make tracking ID clickable to populate form field
+                document.getElementById('key-tracking-id').style.cursor = 'pointer';
+                document.getElementById('key-tracking-id').title = 'Click to copy to form field';
+                document.getElementById('key-tracking-id').onclick = function() {
+                    document.querySelector('[name="order_tracking_id"]').value = data.data.order_tracking_id;
+                    showResponse('📋 Tracking ID Copied', {
+                        message: 'Order tracking ID has been copied to the form field',
+                        tracking_id: data.data.order_tracking_id
+                    }, true);
+                };
+                
+                // Enhanced display with order_tracking_id highlighting
+                let displayContent = '';
+                displayContent += `🔍 ORDER TRACKING ID: ${data.data.order_tracking_id}\n`;
+                displayContent += `📋 MERCHANT REFERENCE: ${data.data.test_info?.test_id || 'N/A'}\n`;
+                displayContent += `💰 AMOUNT: ${data.data.test_data?.amount || 'N/A'} ${data.data.test_data?.currency || 'UGX'}\n`;
+                displayContent += `🔗 REDIRECT URL: ${data.data.redirect_url || 'N/A'}\n`;
+                displayContent += `⏱️  RESPONSE TIME: ${data.data.test_info?.response_time || 'N/A'}\n`;
+                displayContent += '\n--- FULL RESPONSE ---\n';
+                displayContent += JSON.stringify(data, null, 2);
+                contentEl.textContent = displayContent;
+            } else {
+                keyInfoPanel.classList.add('hidden');
+                contentEl.textContent = JSON.stringify(data, null, 2);
+            }
             
             container.classList.remove('hidden');
             container.scrollIntoView({ behavior: 'smooth' });
@@ -1314,6 +1514,25 @@
             data.debug_mode = e.target.querySelector('[name="debug_mode"]').checked ? '1' : '0';
             data.validate_response = e.target.querySelector('[name="validate_response"]').checked ? '1' : '0';
             data.retry_on_failure = e.target.querySelector('[name="retry_on_failure"]').checked ? '1' : '0';
+            
+            // Check if order_tracking_id is provided for status checking
+            if (data.order_tracking_id && data.order_tracking_id.trim()) {
+                // If order tracking ID is provided, check status instead of creating new payment
+                console.log('🔍 Order tracking ID provided, checking status instead of creating new payment');
+                
+                try {
+                    const statusResponse = await apiCall('/payment-test/status', 'POST', { 
+                        tracking_id: data.order_tracking_id.trim() 
+                    });
+                    showResponse(`🔍 Status Check for ${data.order_tracking_id}`, statusResponse, statusResponse.success);
+                    return;
+                } catch (error) {
+                    showResponse('Status Check Error', { error: error.message }, false);
+                    return;
+                } finally {
+                    setLoading(submitBtn, false);
+                }
+            }
             
             // Enhanced logging for debugging
             console.log('🚀 Initiating payment with enhanced data:', {
@@ -1447,6 +1666,9 @@
                     // Enhanced fields
                     const merchantRef = 'BX-TEST-' + new Date().toISOString().replace(/[-:T]/g, '').substring(0, 14) + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
                     form.querySelector('[name="merchant_reference"]').value = merchantRef;
+                    
+                    // Clear order tracking ID for new payment generation
+                    form.querySelector('[name="order_tracking_id"]').value = '';
                     
                     // Generate random currency occasionally
                     const currencies = ['UGX', 'USD', 'EUR', 'KES'];
@@ -1591,6 +1813,35 @@
             } catch (error) {
                 showResponse('Status Check Error', { error: error.message }, false);
             }
+        }
+
+        // Check current transaction status (from key info panel)
+        async function checkCurrentTransactionStatus() {
+            if (!window.currentTrackingId) {
+                showResponse('❌ No Tracking ID', { error: 'No order tracking ID available' }, false);
+                return;
+            }
+
+            const button = document.getElementById('check-status-btn');
+            setLoading(button, true);
+
+            try {
+                const response = await apiCall('/payment-test/status', 'POST', { tracking_id: window.currentTrackingId });
+                showResponse(`🔍 Status Check for ${window.currentTrackingId}`, response, response.success);
+            } catch (error) {
+                showResponse('Status Check Error', { error: error.message }, false);
+            } finally {
+                setLoading(button, false);
+            }
+        }
+
+        // Clear order tracking ID field
+        function clearTrackingId() {
+            document.querySelector('[name="order_tracking_id"]').value = '';
+            showResponse('🗑️ Field Cleared', {
+                message: 'Order tracking ID field has been cleared',
+                action: 'Ready for new payment'
+            }, true);
         }
 
         // Refresh status (for current form data)

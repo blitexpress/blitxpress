@@ -5,11 +5,12 @@ namespace App\Config;
 class PesapalConfig
 {
     /**
-     * Get Pesapal environment (sandbox or live)
+     * Get Pesapal environment (production or sandbox)
+     * DEFAULT: production (live environment)
      */
     public static function getEnvironment(): string
     {
-        return config('services.pesapal.environment', 'sandbox');
+        return config('services.pesapal.environment', env('PESAPAL_ENVIRONMENT', 'production'));
     }
 
     /**
@@ -18,6 +19,14 @@ class PesapalConfig
     public static function isSandbox(): bool
     {
         return self::getEnvironment() === 'sandbox';
+    }
+
+    /**
+     * Check if running in production mode
+     */
+    public static function isProduction(): bool
+    {
+        return self::getEnvironment() === 'production';
     }
 
     /**

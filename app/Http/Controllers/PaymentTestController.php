@@ -49,7 +49,7 @@ class PaymentTestController extends Controller
     }
 
     /**
-     * 💳 Initialize Test Payment
+     * 💳 Initialize Test Payment - UPDATED for Centralized API Client
      */
     public function initializePayment(Request $request)
     {
@@ -80,29 +80,34 @@ class PaymentTestController extends Controller
                 throw new \Exception('Request validation failed: ' . implode(', ', $validationResult['errors']));
             }
 
-            // Create a test order or use existing one
-            $order = $this->createTestOrder($request);
+            // Use centralized API client for test payment (simplified approach)
+            $merchantReference = 'TEST_' . time() . '_' . uniqid();
             
-            // Update log with order ID
-            $log->update(['order_id' => $order->id]);
-            
-            // Enhanced API call with configuration
-            $callbackUrl = $request->input('callback_url', url('/payment-test/callback'));
-            $notificationId = $request->input('notification_id'); // Will use default IPN if null
-            
-            // Configure API settings based on form input
-            $apiConfig = [
-                'timeout' => $request->input('request_timeout', 30),
-                'debug_mode' => $request->boolean('debug_mode', true),
-                'validate_response' => $request->boolean('validate_response', true),
-                'retry_on_failure' => $request->boolean('retry_on_failure', false),
-                'api_environment' => $request->input('api_environment', 'production')
+            // Prepare payment data using EXACT working pattern
+            $orderData = [
+                'merchant_reference' => $merchantReference,
+                'amount' => (float) $request->input('amount'),
+                'currency' => $request->input('currency', 'UGX'),
+                'description' => $request->input('description', 'Test payment'),
+                'customer_name' => $request->input('customer_name'),
+                'customer_email' => $request->input('customer_email'),
+                'customer_phone' => $request->input('customer_phone'),
+                'customer_address' => $request->input('customer_address', ''),
+                'callback_url' => $request->input('callback_url', url('/payment-test/callback'))
             ];
             
-            // Log API configuration
-            Log::info('🔧 API Configuration for Request', $apiConfig);
+            // Update log with test data
+            $log->update(['merchant_reference' => $merchantReference]);
             
-            $response = $this->pesapalService->submitOrderRequest($order, $notificationId, $callbackUrl);
+            // Log API configuration
+            Log::info('🔧 Centralized API Client Test Payment Request', [
+                'merchant_reference' => $merchantReference,
+                'amount' => $orderData['amount'],
+                'currency' => $orderData['currency']
+            ]);
+            
+            // Use centralized API client directly (bypassing PesapalService for test)
+            $response = $this->pesapalService->createTestPayment($orderData);
             
             // Enhanced response validation
             if ($request->boolean('validate_response', true)) {
@@ -112,46 +117,53 @@ class PaymentTestController extends Controller
                 }
             }
             
-            $endTime = microtime(true);
-            $responseTime = round(($endTime - $startTime) * 1000, 2); // Convert to milliseconds
             
-            // Complete the log
-            PesapalLog::completeLog($log->id, [
-                'success' => true,
-                'response_data' => $response,
-                'message' => '🎉 Payment initialized successfully!',
-                'status_code' => '200',
-                'response_time_ms' => $responseTime,
-                'tracking_id' => $response['order_tracking_id'] ?? null,
-                'merchant_reference' => $response['merchant_reference'] ?? null
-            ]);
+            // Validate response for successful payment
+            if (isset($response['success']) && $response['success']) {
+                $endTime = microtime(true);
+                $responseTime = round(($endTime - $startTime) * 1000, 2); // Convert to milliseconds
+                
+                // Complete the log
+                PesapalLog::completeLog($log->id, [
+                    'success' => true,
+                    'response_data' => $response,
+                    'message' => '🎉 Payment initialized successfully!',
+                    'status_code' => '200',
+                    'response_time_ms' => $responseTime,
+                    'tracking_id' => $response['order_tracking_id'] ?? null,
+                    'merchant_reference' => $merchantReference
+                ]);
 
-            // Log the test for debugging
-            Log::info('🧪 Payment Test Initialized', [
-                'log_id' => $log->id,
-                'order_id' => $order->id,
-                'amount' => $order->order_total,
-                'currency' => config('services.pesapal.currency', 'UGX'),
-                'response' => $response
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => '🎉 Payment initialized successfully!',
-                'data' => [
+                // Log the test for debugging
+                Log::info('🧪 Payment Test Initialized via Centralized API Client', [
                     'log_id' => $log->id,
-                    'order' => $order->fresh(),
-                    'payment_response' => $response,
-                    'redirect_url' => $response['redirect_url'] ?? null,
-                    'order_tracking_id' => $response['order_tracking_id'] ?? null,
-                    'test_info' => [
-                        'test_id' => 'TEST_' . time(),
-                        'timestamp' => now()->toISOString(),
-                        'environment' => config('app.env'),
-                        'response_time' => $responseTime . 'ms'
+                    'merchant_reference' => $merchantReference,
+                    'amount' => $orderData['amount'],
+                    'currency' => $orderData['currency'],
+                    'response' => $response
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => '🎉 Payment initialized successfully!',
+                    'data' => [
+                        'log_id' => $log->id,
+                        'test_data' => $orderData,
+                        'payment_response' => $response,
+                        'redirect_url' => $response['redirect_url'] ?? null,
+                        'order_tracking_id' => $response['order_tracking_id'] ?? null,
+                        'test_info' => [
+                            'test_id' => $merchantReference,
+                            'timestamp' => now()->toISOString(),
+                            'environment' => config('app.env'),
+                            'response_time' => $responseTime . 'ms',
+                            'api_client' => 'centralized'
+                        ]
                     ]
-                ]
-            ]);
+                ]);
+            } else {
+                throw new \Exception($response['error'] ?? 'Payment initialization failed');
+            }
 
         } catch (\Exception $e) {
             $endTime = microtime(true);
@@ -706,7 +718,7 @@ class PaymentTestController extends Controller
     }
 
     /**
-     * �🔧 Test Pesapal Configuration
+     * 🔧 Test Pesapal Configuration - UPDATED for Centralized API Client
      */
     public function testConfiguration()
     {
@@ -714,21 +726,22 @@ class PaymentTestController extends Controller
             $config = [
                 'timestamp' => now()->toISOString(),
                 'environment' => config('app.env'),
-                'pesapal_env' => config('services.pesapal.environment', 'sandbox'),
+                'pesapal_env' => config('services.pesapal.environment', 'production'),
                 'base_url' => \App\Config\PesapalConfig::getBaseUrl(),
                 'consumer_key' => config('services.pesapal.consumer_key') ? '✅ Set (' . substr(config('services.pesapal.consumer_key'), 0, 8) . '...)' : '❌ Missing',
                 'consumer_secret' => config('services.pesapal.consumer_secret') ? '✅ Set (' . substr(config('services.pesapal.consumer_secret'), 0, 8) . '...)' : '❌ Missing',
                 'callback_url' => config('services.pesapal.callback_url') ?: '❌ Not set',
                 'ipn_url' => config('services.pesapal.ipn_url') ?: '❌ Not set',
                 'currency' => config('services.pesapal.currency', 'UGX'),
-                'country_code' => \App\Config\PesapalProductionConfig::getCountryCode()
+                'country_code' => \App\Config\PesapalProductionConfig::getCountryCode(),
+                'api_client' => 'centralized'
             ];
 
             // Enhanced environment variable check
             $envVars = [
                 'PESAPAL_CONSUMER_KEY' => env('PESAPAL_CONSUMER_KEY') ? '✅ Set' : '❌ Missing',
                 'PESAPAL_CONSUMER_SECRET' => env('PESAPAL_CONSUMER_SECRET') ? '✅ Set' : '❌ Missing',
-                'PESAPAL_ENVIRONMENT' => env('PESAPAL_ENVIRONMENT', 'sandbox'),
+                'PESAPAL_ENVIRONMENT' => env('PESAPAL_ENVIRONMENT', 'production'),
                 'PESAPAL_CURRENCY' => env('PESAPAL_CURRENCY', 'UGX'),
                 'PESAPAL_CALLBACK_URL' => env('PESAPAL_CALLBACK_URL') ?: '❌ Not set',
                 'PESAPAL_IPN_URL' => env('PESAPAL_IPN_URL') ?: '❌ Not set'
@@ -746,22 +759,39 @@ class PaymentTestController extends Controller
                 $issues[] = 'Missing PESAPAL_CALLBACK_URL in .env file';
             }
 
-            // Test authentication
+            // Test centralized API client directly
             $authResult = [];
+            $testConnectionResult = [];
             try {
-                Log::info('🧪 Testing Pesapal Authentication...');
+                Log::info('🧪 Testing Centralized Pesapal API Client...');
+                
+                // Test authentication via centralized client
                 $token = $this->pesapalService->getAuthToken();
                 $authResult = [
-                    'status' => '✅ Authentication successful',
+                    'status' => '✅ Authentication successful (Centralized Client)',
                     'token_preview' => substr($token, 0, 20) . '...',
                     'token_length' => strlen($token)
                 ];
+                
+                // Test connection via centralized client
+                $connectionTest = $this->pesapalService->testConnection();
+                $testConnectionResult = [
+                    'status' => $connectionTest['success'] ? '✅ Connection test passed' : '❌ Connection test failed',
+                    'response_time' => $connectionTest['response_time'] ?? 'unknown',
+                    'details' => $connectionTest
+                ];
+                
             } catch (\Exception $e) {
                 $authResult = [
                     'status' => '❌ Authentication failed',
                     'error' => $e->getMessage(),
                     'file' => $e->getFile(),
                     'line' => $e->getLine()
+                ];
+                
+                $testConnectionResult = [
+                    'status' => '❌ Connection test failed',
+                    'error' => $e->getMessage()
                 ];
                 
                 // Add specific error analysis
@@ -776,19 +806,25 @@ class PaymentTestController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => '🔧 Configuration analysis complete',
+                'message' => '🔧 Configuration analysis complete (Centralized API Client)',
                 'data' => [
                     'config' => $config,
                     'environment_variables' => $envVars,
                     'authentication_test' => $authResult,
+                    'connection_test' => $testConnectionResult,
                     'issues' => $issues,
                     'recommendations' => empty($issues) ? ['Configuration looks good!'] : [
                         'Check your .env file for missing PESAPAL_* variables',
-                        'Ensure you have valid Pesapal sandbox credentials',
+                        'Ensure you have valid Pesapal production credentials',
                         'Verify network connectivity to Pesapal API',
                         'Run "php artisan config:clear" after updating .env'
                     ],
-                    'health_check' => $this->performHealthCheck()
+                    'health_check' => $this->performHealthCheck(),
+                    'api_client_info' => [
+                        'type' => 'centralized',
+                        'version' => '1.0',
+                        'features' => ['authentication', 'payment_initialization', 'status_checking', 'ipn_registration']
+                    ]
                 ]
             ]);
 
