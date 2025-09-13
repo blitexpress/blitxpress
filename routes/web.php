@@ -365,3 +365,51 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::post('reviews/bulk-delete', [ReviewController::class, 'bulkDelete'])->name('reviews.bulk-delete');
 });
 
+# 🧪 PESAPAL PAYMENT TESTING INTERFACE
+# Independent testing interface for Pesapal integration
+# Routes: /payment-test/*
+use App\Http\Controllers\PaymentTestController;
+
+Route::prefix('payment-test')->name('payment-test.')->group(function () {
+    
+    // 🎨 Main Dashboard
+    Route::get('/', [PaymentTestController::class, 'dashboard'])->name('dashboard');
+    
+    // � Quick Test Page
+    Route::get('/quick', function() {
+        return view('pesapal-quick-test');
+    })->name('quick');
+    
+    // �💳 Payment Testing
+    Route::post('/initialize', [PaymentTestController::class, 'initializePayment'])->name('initialize');
+    Route::get('/callback', function() {
+        return view('payment-test.callback-success');
+    })->name('callback');
+    
+    // 🔍 Status & Monitoring
+    Route::post('/status', [PaymentTestController::class, 'checkPaymentStatus'])->name('status');
+    Route::post('/status/live', [PaymentTestController::class, 'liveStatusMonitor'])->name('status.live');
+    
+    // 🎲 Test Data Generation
+    Route::get('/generate-data', [PaymentTestController::class, 'generateTestData'])->name('generate-data');
+    Route::post('/scenarios', [PaymentTestController::class, 'testScenarios'])->name('scenarios');
+    Route::post('/bulk-test', [PaymentTestController::class, 'bulkTest'])->name('bulk-test');
+    
+    // 📊 Analytics & Stats
+    Route::get('/analytics', [PaymentTestController::class, 'getAnalytics'])->name('analytics');
+    Route::get('/stats', [PaymentTestController::class, 'getPaymentStats'])->name('stats');
+    
+    // 📋 Log Details
+    Route::get('/log/{id}', [PaymentTestController::class, 'getLogDetails'])->name('log.details');
+    
+    // 🎭 Simulation Tools
+    Route::post('/simulate-callback', [PaymentTestController::class, 'simulateCallback'])->name('simulate-callback');
+    
+    // 🔧 Configuration & Health
+    Route::get('/config', [PaymentTestController::class, 'testConfiguration'])->name('config');
+    
+    // 🧹 Cleanup
+    Route::delete('/cleanup', [PaymentTestController::class, 'cleanupTestData'])->name('cleanup');
+    
+});
+

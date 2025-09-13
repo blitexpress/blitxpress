@@ -8,6 +8,7 @@ use App\Exceptions\PesapalException;
 use App\Models\Order;
 use App\Models\PesapalTransaction;
 use App\Models\PesapalIpnLog;
+use App\Models\PesapalLog;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
@@ -136,16 +137,36 @@ class PesapalService
         $amount = (float) $order->order_total;
         \App\Config\PesapalProductionConfig::validateTransactionAmount($amount);
 
+        // 📝 START DETAILED LOGGING - Create initial log entry
+        $logData = [
+            'test_type' => 'api_call',
+            'action' => 'submit_order_request',
+            'method' => 'POST',
+            'endpoint' => $this->baseUrl . '/Transactions/SubmitOrderRequest',
+            'order_id' => $order->id,
+            'merchant_reference' => $merchantReference,
+            'amount' => $amount,
+            'currency' => \App\Config\PesapalProductionConfig::getCurrency(),
+            'customer_name' => $order->customer_name ?: ($order->customer->first_name ?? ''),
+            'customer_email' => $order->mail ?: ($order->customer->email ?? ''),
+            'customer_phone' => $order->customer_phone_number_1 ?: ($order->customer->phone_number ?? ''),
+            'description' => 'Order #' . $order->id . ' payment',
+            'api_environment' => $this->baseUrl === 'https://pay.pesapal.com/v3/api' ? 'PRODUCTION' : 'SANDBOX',
+        ];
+
+        $log = PesapalLog::logTest($logData);
+
         try {
             $token = $this->getAuthToken();
 
+            // Handle IPN URL - if no notification_id provided or it's invalid, don't include it
+            // Pesapal will use the default IPN configuration
             $payload = [
                 'id' => $merchantReference,
                 'currency' => \App\Config\PesapalProductionConfig::getCurrency(),
                 'amount' => $amount,
                 'description' => 'Order #' . $order->id . ' payment',
                 'callback_url' => $callbackUrl,
-                'notification_id' => $notificationId,
                 'billing_address' => [
                     'email_address' => $order->mail ?: ($order->customer->email ?? ''),
                     'phone_number' => $order->customer_phone_number_1 ?: ($order->customer->phone_number ?? ''),
@@ -161,21 +182,146 @@ class PesapalService
                 ]
             ];
 
+            // Only include notification_id if it's provided and not empty
+            if (!empty($notificationId)) {
+                $payload['notification_id'] = $notificationId;
+                Log::info('Pesapal: Using provided notification_id', ['notification_id' => $notificationId]);
+            } else {
+                // Try to get or register a default IPN URL
+                try {
+                    $ipnUrl = env('PESAPAL_IPN_URL');
+                    if ($ipnUrl) {
+                        Log::info('Pesapal: Attempting to register IPN URL automatically', ['ipn_url' => $ipnUrl]);
+                        $ipnResponse = $this->registerIpnUrl($ipnUrl);
+                        if (isset($ipnResponse['ipn_id'])) {
+                            $payload['notification_id'] = $ipnResponse['ipn_id'];
+                            Log::info('Pesapal: Auto-registered IPN URL successfully', ['ipn_id' => $ipnResponse['ipn_id']]);
+                        }
+                    } else {
+                        Log::info('Pesapal: No IPN URL configured, proceeding without notification_id');
+                    }
+                } catch (\Exception $ipnError) {
+                    Log::warning('Pesapal: Failed to auto-register IPN URL, proceeding without notification_id', [
+                        'error' => $ipnError->getMessage()
+                    ]);
+                    // Continue without notification_id - Pesapal should still work
+                }
+            }
+
+            // 📝 LOG THE COMPLETE POST PAYLOAD
+            $requestHeaders = [
+                'Accept' => 'application/json',
+                'Content-Type' => 'application/json',
+                'Authorization' => 'Bearer [HIDDEN]', // Hide token in logs
+            ];
+
+            // Update log with complete request data
+            $log->update([
+                'request_data' => [
+                    'payload' => $payload,
+                    'headers' => $requestHeaders,
+                    'endpoint' => $this->baseUrl . '/Transactions/SubmitOrderRequest',
+                    'method' => 'POST',
+                    'callback_url' => $callbackUrl,
+                    'notification_id' => $payload['notification_id'] ?? null,
+                    'ip_address' => request()->ip(),
+                    'user_agent' => request()->header('User-Agent'),
+                    'timestamp' => now()->toISOString()
+                ],
+                'tracking_id' => $merchantReference
+            ]);
+
+            Log::info('Pesapal: Submitting order request', [
+                'order_id' => $order->id,
+                'merchant_reference' => $merchantReference,
+                'amount' => $amount,
+                'currency' => $payload['currency'],
+                'payload' => $payload
+            ]);
+
+            // Record start time for response timing
+            $startTime = microtime(true);
+
             $response = Http::withHeaders([
                 'Accept' => 'application/json',
                 'Content-Type' => 'application/json',
                 'Authorization' => 'Bearer ' . $token,
             ])->post($this->baseUrl . '/Transactions/SubmitOrderRequest', $payload);
 
+            // Calculate response time
+            $responseTimeMs = round((microtime(true) - $startTime) * 1000, 2);
+
             if ($response->successful()) {
                 $data = $response->json();
                 
-                Log::info('Pesapal: Raw response received', ['data' => $data]);
+                Log::info('Pesapal: Raw response received', [
+                    'data' => $data,
+                    'status_code' => $response->status(),
+                    'headers' => $response->headers(),
+                    'raw_body' => $response->body(),
+                    'response_time_ms' => $responseTimeMs
+                ]);
                 
-                // Check if required fields exist in response
-                if (!isset($data['order_tracking_id']) || !isset($data['redirect_url'])) {
-                    Log::error('Pesapal: Missing required fields in response', ['data' => $data]);
-                    throw new \Exception('Invalid response from Pesapal: Missing order_tracking_id or redirect_url');
+                // Check if this is actually an error response disguised as a 200
+                if (isset($data['error']) || isset($data['status']) && $data['status'] !== 200) {
+                    $errorMsg = $data['error']['message'] ?? $data['message'] ?? 'Unknown Pesapal error';
+                    $errorCode = $data['error']['code'] ?? 'unknown_error';
+                    $errorType = $data['error']['error_type'] ?? 'api_error';
+                    
+                    // 📝 LOG ERROR RESPONSE
+                    PesapalLog::completeLog($log->id, [
+                        'success' => false,
+                        'status_code' => $response->status(),
+                        'message' => 'Pesapal API Error: ' . $errorMsg,
+                        'error_message' => $errorMsg . ' (Code: ' . $errorCode . ', Type: ' . $errorType . ')',
+                        'response_data' => $data,
+                        'response_time_ms' => $responseTimeMs
+                    ]);
+                    
+                    Log::error('Pesapal: API returned error in successful response', [
+                        'error_message' => $errorMsg,
+                        'error_code' => $errorCode,
+                        'error_type' => $errorType,
+                        'full_response' => $data,
+                        'payload_sent' => $payload
+                    ]);
+                    
+                    throw new \Exception('Pesapal API Error: ' . $errorMsg . ' (Code: ' . $errorCode . ')');
+                }
+                
+                // Enhanced validation with detailed logging
+                $missingFields = [];
+                if (!isset($data['order_tracking_id']) || empty($data['order_tracking_id'])) {
+                    $missingFields[] = 'order_tracking_id';
+                }
+                if (!isset($data['redirect_url']) || empty($data['redirect_url'])) {
+                    $missingFields[] = 'redirect_url';
+                }
+                
+                if (!empty($missingFields)) {
+                    // 📝 LOG VALIDATION FAILURE
+                    PesapalLog::completeLog($log->id, [
+                        'success' => false,
+                        'status_code' => $response->status(),
+                        'message' => 'Missing required fields: ' . implode(' and ', $missingFields),
+                        'error_message' => 'Invalid response from Pesapal: Missing ' . implode(' and ', $missingFields),
+                        'response_data' => $data,
+                        'response_time_ms' => $responseTimeMs,
+                        'debug_info' => [
+                            'missing_fields' => $missingFields,
+                            'available_fields' => array_keys($data),
+                            'troubleshooting' => 'Check Pesapal API response format and ensure all required fields are present'
+                        ]
+                    ]);
+                    
+                    Log::error('Pesapal: Missing required fields in response', [
+                        'missing_fields' => $missingFields,
+                        'available_fields' => array_keys($data),
+                        'full_response' => $data,
+                        'payload_sent' => $payload ?? 'Unknown'
+                    ]);
+                    
+                    throw new \Exception('Invalid response from Pesapal: Missing ' . implode(' and ', $missingFields) . '. Available fields: ' . implode(', ', array_keys($data)));
                 }
                 
                 // Create transaction record
@@ -203,6 +349,16 @@ class PesapalService
                     'payment_status' => 'PENDING_PAYMENT'
                 ]);
 
+                // 📝 LOG SUCCESSFUL RESPONSE
+                PesapalLog::completeLog($log->id, [
+                    'success' => true,
+                    'status_code' => $response->status(),
+                    'message' => 'Order submitted successfully to Pesapal',
+                    'response_data' => $data,
+                    'response_time_ms' => $responseTimeMs,
+                    'tracking_id' => $data['order_tracking_id']
+                ]);
+
                 Log::info('Pesapal: Order submitted successfully', [
                     'order_id' => $order->id,
                     'tracking_id' => $data['order_tracking_id']
@@ -211,18 +367,94 @@ class PesapalService
                 return $data;
             }
 
-            Log::error('Pesapal: Order submission failed', [
-                'order_id' => $order->id,
-                'status' => $response->status(),
-                'response' => $response->json()
+            // Enhanced error handling for unsuccessful responses
+            $statusCode = $response->status();
+            $responseBody = $response->body();
+            $responseData = $response->json();
+
+            // 📝 LOG HTTP FAILURE RESPONSE
+            PesapalLog::completeLog($log->id, [
+                'success' => false,
+                'status_code' => $statusCode,
+                'message' => 'HTTP request failed with status ' . $statusCode,
+                'error_message' => 'Failed to submit order to Pesapal: ' . $responseBody,
+                'response_data' => $responseData,
+                'response_time_ms' => $responseTimeMs,
+                'debug_info' => [
+                    'http_status' => $statusCode,
+                    'response_body' => $responseBody,
+                    'troubleshooting' => 'Check API credentials, network connectivity, and Pesapal service status'
+                ]
             ]);
 
-            throw new \Exception('Failed to submit order to Pesapal: ' . $response->body());
+            Log::error('Pesapal: Order submission failed', [
+                'order_id' => $order->id,
+                'status_code' => $statusCode,
+                'response_body' => $responseBody,
+                'response_data' => $responseData,
+                'payload_sent' => $payload,
+                'headers_sent' => [
+                    'Accept' => 'application/json',
+                    'Content-Type' => 'application/json',
+                    'Authorization' => 'Bearer [HIDDEN]'
+                ]
+            ]);
+
+            // Provide specific error messages based on status code
+            $errorMessage = 'Failed to submit order to Pesapal';
+            
+            switch ($statusCode) {
+                case 400:
+                    $errorMessage = 'Bad Request: Invalid parameters sent to Pesapal';
+                    break;
+                case 401:
+                    $errorMessage = 'Unauthorized: Invalid or expired Pesapal API credentials';
+                    break;
+                case 403:
+                    $errorMessage = 'Forbidden: Access denied by Pesapal';
+                    break;
+                case 404:
+                    $errorMessage = 'Not Found: Pesapal endpoint not available';
+                    break;
+                case 422:
+                    $errorMessage = 'Validation Error: ' . ($responseData['message'] ?? 'Invalid data format');
+                    break;
+                case 429:
+                    $errorMessage = 'Rate Limited: Too many requests to Pesapal';
+                    break;
+                case 500:
+                    $errorMessage = 'Pesapal Server Error: Service temporarily unavailable';
+                    break;
+                default:
+                    if ($responseData && isset($responseData['message'])) {
+                        $errorMessage .= ': ' . $responseData['message'];
+                    } else {
+                        $errorMessage .= ' (Status: ' . $statusCode . ')';
+                    }
+            }
+
+            throw new \Exception($errorMessage . ' - Response: ' . $responseBody);
 
         } catch (\Exception $e) {
+            // 📝 LOG EXCEPTION
+            PesapalLog::completeLog($log->id, [
+                'success' => false,
+                'status_code' => 500,
+                'message' => 'Exception occurred during order submission',
+                'error_message' => $e->getMessage(),
+                'response_data' => null,
+                'response_time_ms' => isset($responseTimeMs) ? $responseTimeMs : null,
+                'debug_info' => [
+                    'exception_type' => get_class($e),
+                    'exception_trace' => $e->getTraceAsString(),
+                    'troubleshooting' => 'Check error message and trace for specific issue details'
+                ]
+            ]);
+            
             Log::error('Pesapal: Order submission exception', [
                 'order_id' => $order->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
             throw $e;
         }
