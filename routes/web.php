@@ -19,12 +19,38 @@ use Illuminate\Support\Facades\Route;
     return response()->json(['message' => 'BlitXpress API is running']);
 }); */
 
+Route::get('img-compress-test', function () {
+    //tinyfy api key : 8Ssgn8WJklj4svhwb4ytprMKX3rLvFHf
+    $lastUncompressedImages = \App\Models\Image::where([])->orderBy('id', 'desc')->get()->take(10);
+    foreach ($lastUncompressedImages as $img) {
+        $path = Utils::img_path($img->src);
+
+        //check if file exists
+        if (!file_exists($path)) {
+            echo "File not found: $path<br>";
+            continue;
+        }
+
+        $file_size_in_mb = filesize($path) / (1024 * 1024);
+        $file_size_in_mb = round($file_size_in_mb, 2);
+        echo "File size: {$file_size_in_mb} MB<br>";
+        $url = Utils::img_url($img->src);
+        echo '<img src="' . $url . '" alt="Image" style="max-width: 200px; margin: 10px;"><hr>';
+        $compressed = Utils::tinyCompressImage($path);
+        dd($compressed);
+
+        dd($url);
+        dd($img);
+    }
+
+    dd("Not implemented yet");
+});
 Route::get('mail-test', function () {
 
     try {
         // Test 1: Test order email system
         echo "<h2>🧪 Testing Order Email System...</h2>";
-        
+
         $lastOrder = Order::orderBy('id', 'desc')->first();
         if ($lastOrder) {
             echo "<div style='background: #f8f9fa; padding: 15px; margin: 10px 0; border-left: 4px solid #007bff;'>";
@@ -34,11 +60,11 @@ Route::get('mail-test', function () {
             echo "<p><strong>Total Amount:</strong> CAD {$lastOrder->total}</p>";
             echo "<p><strong>Order Date:</strong> {$lastOrder->created_at}</p>";
             echo "</div>";
-            
+
             echo "<p>🚀 Triggering order email system...</p>";
             Order::send_mails($lastOrder);
             echo "<p style='color: green;'><strong>✅ Order emails sent successfully!</strong></p>";
-            
+
             // Show email validation status
             if ($lastOrder->customer && $lastOrder->customer->email) {
                 $isValidEmail = filter_var($lastOrder->customer->email, FILTER_VALIDATE_EMAIL);
@@ -50,16 +76,15 @@ Route::get('mail-test', function () {
             } else {
                 echo "<p style='color: orange;'>⚠️ Customer has no email - only admin emails sent</p>";
             }
-            
         } else {
             echo "<p style='color: red;'><strong>❌ No orders found in database</strong></p>";
         }
-        
+
         echo "<hr style='margin: 20px 0;'>";
-        
+
         // Test 2: General mail system test
         echo "<h2>📧 Testing General Mail System...</h2>";
-        
+
         $data['body'] = 'This is a general test email from BlitXpress mail system.';
         $data['data'] = $data['body'];
         $data['name'] = 'Test User';
@@ -68,14 +93,13 @@ Route::get('mail-test', function () {
         $data['view'] = 'mail-1';
 
         echo "<p>Sending general test email to: " . $data['email'] . "</p>";
-        
+
         Utils::mail_sender($data);
-        
+
         echo "<p style='color: green;'><strong>✅ General mail sent successfully!</strong></p>";
-        
     } catch (\Exception $e) {
         echo "<p style='color: red;'><strong>❌ Mail Error:</strong> " . $e->getMessage() . "</p>";
-        
+
         echo "<h3>🔍 Debug Information:</h3>";
         echo "<pre style='background: #f8f9fa; padding: 10px; border: 1px solid #ddd;'>";
         echo "MAIL_HOST: " . env('MAIL_HOST') . "\n";
@@ -85,7 +109,7 @@ Route::get('mail-test', function () {
         echo "MAIL_FROM_ADDRESS: " . env('MAIL_FROM_ADDRESS') . "\n";
         echo "</pre>";
     }
-    
+
     echo "<div style='background: #d4edda; padding: 15px; margin: 20px 0; border-left: 4px solid #28a745;'>";
     echo "<h3>✅ Test Summary</h3>";
     echo "<p>• Order email system: Configured and tested</p>";
@@ -93,7 +117,7 @@ Route::get('mail-test', function () {
     echo "<p>• Customer confirmations: Enabled (when email is valid)</p>";
     echo "<p>• Email validation: Active</p>";
     echo "</div>";
-    
+
     return [
         'status' => 'Mail test completed',
         'timestamp' => date('Y-m-d H:i:s'),
@@ -151,8 +175,8 @@ Route::get('test', function () {
 
 
 
-Route::get('migrate', function () { 
-    Artisan::call('migrate', ['--force' => true]); 
+Route::get('migrate', function () {
+    Artisan::call('migrate', ['--force' => true]);
     return Artisan::output();
 });
 
@@ -360,6 +384,7 @@ Route::get('generate-class', [MainController::class, 'generate_class']);
 
 # Admin routes for reviews
 use App\Http\Controllers\Admin\ReviewController;
+
 Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
     Route::resource('reviews', ReviewController::class);
     Route::post('reviews/bulk-delete', [ReviewController::class, 'bulkDelete'])->name('reviews.bulk-delete');
@@ -371,45 +396,43 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
 use App\Http\Controllers\PaymentTestController;
 
 Route::prefix('payment-test')->name('payment-test.')->group(function () {
-    
+
     // 🎨 Main Dashboard
     Route::get('/', [PaymentTestController::class, 'dashboard'])->name('dashboard');
-    
+
     // � Quick Test Page
-    Route::get('/quick', function() {
+    Route::get('/quick', function () {
         return view('pesapal-quick-test');
     })->name('quick');
-    
+
     // �💳 Payment Testing
     Route::post('/initialize', [PaymentTestController::class, 'initializePayment'])->name('initialize');
-    Route::get('/callback', function() {
+    Route::get('/callback', function () {
         return view('payment-test.callback-success');
     })->name('callback');
-    
+
     // 🔍 Status & Monitoring
     Route::post('/status', [PaymentTestController::class, 'checkPaymentStatus'])->name('status');
     Route::post('/status/live', [PaymentTestController::class, 'liveStatusMonitor'])->name('status.live');
-    
+
     // 🎲 Test Data Generation
     Route::get('/generate-data', [PaymentTestController::class, 'generateTestData'])->name('generate-data');
     Route::post('/scenarios', [PaymentTestController::class, 'testScenarios'])->name('scenarios');
     Route::post('/bulk-test', [PaymentTestController::class, 'bulkTest'])->name('bulk-test');
-    
+
     // 📊 Analytics & Stats
     Route::get('/analytics', [PaymentTestController::class, 'getAnalytics'])->name('analytics');
     Route::get('/stats', [PaymentTestController::class, 'getPaymentStats'])->name('stats');
-    
+
     // 📋 Log Details
     Route::get('/log/{id}', [PaymentTestController::class, 'getLogDetails'])->name('log.details');
-    
+
     // 🎭 Simulation Tools
     Route::post('/simulate-callback', [PaymentTestController::class, 'simulateCallback'])->name('simulate-callback');
-    
+
     // 🔧 Configuration & Health
     Route::get('/config', [PaymentTestController::class, 'testConfiguration'])->name('config');
-    
+
     // 🧹 Cleanup
     Route::delete('/cleanup', [PaymentTestController::class, 'cleanupTestData'])->name('cleanup');
-    
 });
-

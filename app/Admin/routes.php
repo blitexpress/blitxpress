@@ -23,8 +23,9 @@ Route::group([
     $router->resource('gens', GenController::class);
     $router->resource('products', ProductController::class);
     $router->resource('product-orders', ProductOrderController::class);
-    $router->resource('orders', OrderController::class); 
+    $router->resource('orders', OrderController::class);
     $router->resource('reviews', ReviewController::class);
+    $router->resource('images', ImageController::class);
 
     $router->resource('delivery-addresses', DeliveryAddressController::class);
 });

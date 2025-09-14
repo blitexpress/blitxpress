@@ -280,7 +280,7 @@ class ApiResurceController extends Controller
             $u->last_name = ucfirst($last_name);
             $u->phone_number = $phone_number_1;  // Correct database field
             $u->name = ucfirst($first_name) . ' ' . ucfirst($last_name);  // Update full name
-            
+
             // Update email if provided
             if ($request->email != null && strlen($request->email) > 5) {
                 $u->email = strtolower(trim($request->email));
@@ -328,7 +328,6 @@ class ApiResurceController extends Controller
             // Return updated user data
             $updatedUser = Administrator::find($u->id);
             return $this->success($updatedUser, "Profile updated successfully.", 1);
-
         } catch (\Throwable $th) {
             return $this->error('Failed to update profile: ' . $th->getMessage());
         }
@@ -682,7 +681,7 @@ class ApiResurceController extends Controller
 
             // Add computed attributes for better frontend consumption
             $product->tags_array = $product->tags_array;
-            
+
             // Safe specifications mapping
             $product->attributes_array = $product->specifications ? $product->specifications->map(function ($attr) {
                 return [
@@ -888,9 +887,9 @@ class ApiResurceController extends Controller
 
         // Send response first
         $response = $this->success($order, "Submitted successfully!");
-        
+
         // After response is prepared, trigger email in background
-        register_shutdown_function(function() use ($order) {
+        register_shutdown_function(function () use ($order) {
             try {
                 \App\Models\Order::send_mails($order);
             } catch (\Throwable $th) {
@@ -998,9 +997,9 @@ class ApiResurceController extends Controller
 
         // Send response first
         $response = $this->success($order, "Submitted successfully!");
-        
+
         // After response is prepared, trigger email in background
-        register_shutdown_function(function() use ($order) {
+        register_shutdown_function(function () use ($order) {
             try {
                 \App\Models\Order::send_mails($order);
             } catch (\Throwable $th) {
@@ -1079,7 +1078,7 @@ class ApiResurceController extends Controller
         $order->mail = $u->email;
         $order->date_created = Carbon::now();
         $order->date_updated = Carbon::now();
-        
+
         if ($delivery != null) {
             try {
                 $order->customer_phone_number_1 = $delivery->phone_number;
@@ -1132,13 +1131,13 @@ class ApiResurceController extends Controller
             if ($paymentGateway === 'pesapal') {
                 $pesapalService = app(PesapalService::class);
                 $callbackUrl = $r->callback_url ?? url("/api/pesapal/callback");
-                
+
                 // Get or register IPN URL
                 $notificationId = $r->notification_id;
                 if (!$notificationId) {
                     $ipnResponse = $pesapalService->registerIpnUrl();
                     $notificationId = $ipnResponse['ipn_id'] ?? null;
-                    
+
                     if (!$notificationId) {
                         throw new \Exception('Failed to register IPN URL with Pesapal');
                     }
@@ -1146,8 +1145,8 @@ class ApiResurceController extends Controller
 
                 // Submit order to Pesapal
                 $pesapalResponse = $pesapalService->submitOrderRequest(
-                    $order, 
-                    $notificationId, 
+                    $order,
+                    $notificationId,
                     $callbackUrl
                 );
 
@@ -1158,7 +1157,6 @@ class ApiResurceController extends Controller
                     'redirect_url' => $pesapalResponse['redirect_url'],
                     'status' => $pesapalResponse['status'] ?? '200'
                 ];
-
             } elseif ($paymentGateway === 'stripe') {
                 // Future: Implement Stripe integration
                 $paymentData = [
@@ -1166,7 +1164,6 @@ class ApiResurceController extends Controller
                     'message' => 'Stripe integration not yet implemented',
                     'status' => 'pending'
                 ];
-
             } else {
                 // Manual payment
                 $paymentData = [
@@ -1175,7 +1172,6 @@ class ApiResurceController extends Controller
                     'status' => 'pending'
                 ];
             }
-
         } catch (\Exception $e) {
             Log::error('Payment initialization failed for order ' . $order->id, [
                 'error' => $e->getMessage(),
@@ -1196,9 +1192,9 @@ class ApiResurceController extends Controller
 
         // Send response first
         $response = $this->success($responseData, "Order created and payment initialized successfully!");
-        
+
         // After response is prepared, trigger email in background
-        register_shutdown_function(function() use ($order) {
+        register_shutdown_function(function () use ($order) {
             try {
                 \App\Models\Order::send_mails($order);
             } catch (\Throwable $th) {
@@ -1227,7 +1223,7 @@ class ApiResurceController extends Controller
         ) {
             return $this->error('Local ID is missing.');
         }
- 
+
 
         $isEdit = false;
         if (
@@ -1646,7 +1642,7 @@ class ApiResurceController extends Controller
         // Filter by search keyword (in the name, description, or tags)
         if ($request->filled('search')) {
             $searchTerm = $request->input('search');
-            
+
             // Use enhanced search with tag prioritization
             $query->enhancedSearch($searchTerm);
         }
@@ -1666,7 +1662,7 @@ class ApiResurceController extends Controller
                 $tags = explode(',', $tags);
             }
             if (is_array($tags)) {
-                $query->where(function($q) use ($tags) {
+                $query->where(function ($q) use ($tags) {
                     foreach ($tags as $tag) {
                         $q->orWhere('tags', 'LIKE', '%' . trim($tag) . '%');
                     }
@@ -1682,7 +1678,7 @@ class ApiResurceController extends Controller
             }
             if (is_array($attributes)) {
                 foreach ($attributes as $attrName => $attrValue) {
-                    $query->whereHas('specifications', function($q) use ($attrName, $attrValue) {
+                    $query->whereHas('specifications', function ($q) use ($attrName, $attrValue) {
                         $q->where('name', $attrName)->where('value', 'LIKE', "%{$attrValue}%");
                     });
                 }
@@ -1759,7 +1755,7 @@ class ApiResurceController extends Controller
             $productIds = $products->items();
             $productIds = collect($productIds)->pluck('id')->toArray();
             $resultsCount = $products->total();
-            
+
             // Get user ID if authenticated
             $userId = null;
             $user = auth('api')->user();
@@ -1768,10 +1764,10 @@ class ApiResurceController extends Controller
             } elseif ($user) {
                 $userId = $user->id;
             }
-            
+
             // Get session ID for guest users
             $sessionId = $request->input('session_id', $request->header('X-Session-ID', session()->getId()));
-            
+
             // Record the search
             SearchHistory::recordSearch($searchTerm, $productIds, $resultsCount, $userId, $sessionId);
         }
@@ -1786,7 +1782,7 @@ class ApiResurceController extends Controller
     {
         $searchTerm = $request->input('q', '');
         $limit = $request->input('limit', 10);
-        
+
         if (empty(trim($searchTerm)) || strlen(trim($searchTerm)) < 2) {
             return $this->success([
                 'products' => [],
@@ -1797,21 +1793,21 @@ class ApiResurceController extends Controller
 
         // Search products with enhanced tag search
         $products = Product::where(function ($query) use ($searchTerm) {
-                // Primary search with tag prioritization
-                $query->where('name', 'LIKE', "%{$searchTerm}%")
-                      ->orWhere('tags', 'LIKE', "%{$searchTerm}%")
-                      ->orWhere('description', 'LIKE', "%{$searchTerm}%");
+            // Primary search with tag prioritization
+            $query->where('name', 'LIKE', "%{$searchTerm}%")
+                ->orWhere('tags', 'LIKE', "%{$searchTerm}%")
+                ->orWhere('description', 'LIKE', "%{$searchTerm}%");
 
-                // Additional search for individual words in tags
-                $searchWords = explode(' ', trim($searchTerm));
-                if (count($searchWords) > 1) {
-                    foreach ($searchWords as $word) {
-                        if (strlen(trim($word)) > 2) {
-                            $query->orWhere('tags', 'LIKE', "%{$word}%");
-                        }
+            // Additional search for individual words in tags
+            $searchWords = explode(' ', trim($searchTerm));
+            if (count($searchWords) > 1) {
+                foreach ($searchWords as $word) {
+                    if (strlen(trim($word)) > 2) {
+                        $query->orWhere('tags', 'LIKE', "%{$word}%");
                     }
                 }
-            })
+            }
+        })
             ->limit($limit)
             ->get(['id', 'name', 'price_1', 'price_2', 'feature_photo', 'category', 'tags']);
 
@@ -1855,17 +1851,17 @@ class ApiResurceController extends Controller
         // Record the search for search history
         $userId = null;
         $user = auth('api')->user();
-        
+
         if (!$user && $request->filled('user')) {
             $userId = $request->input('user');
         } elseif ($user) {
             $userId = $user->id;
         }
-        
+
         $sessionId = $request->input('session_id', $request->header('X-Session-ID', session()->getId()));
         $productIds = $products->pluck('id')->toArray();
         $resultsCount = $products->count();
-        
+
         // Record the search
         SearchHistory::recordSearch($searchTerm, $productIds, $resultsCount, $userId, $sessionId);
 
@@ -1884,20 +1880,20 @@ class ApiResurceController extends Controller
     {
         $userId = null;
         $user = auth('api')->user();
-        
+
         if (!$user && $request->filled('user')) {
             $userId = $request->input('user');
         } elseif ($user) {
             $userId = $user->id;
         }
-        
+
         // Get session ID for guest users
         $sessionId = $request->input('session_id', $request->header('X-Session-ID', session()->getId()));
-        
+
         $limit = $request->input('limit', 10);
-        
+
         $recentSearches = SearchHistory::getRecentSearches($userId, $sessionId, $limit);
-        
+
         return $this->success([
             'recent_searches' => $recentSearches,
             'total' => count($recentSearches)
@@ -1911,22 +1907,22 @@ class ApiResurceController extends Controller
     {
         $userId = null;
         $user = auth('api')->user();
-        
+
         if (!$user && $request->filled('user')) {
             $userId = $request->input('user');
         } elseif ($user) {
             $userId = $user->id;
         }
-        
+
         // Get session ID for guest users
         $sessionId = $request->input('session_id', $request->header('X-Session-ID', session()->getId()));
-        
+
         if ($userId) {
             SearchHistory::where('user_id', $userId)->delete();
         } elseif ($sessionId) {
             SearchHistory::where('session_id', $sessionId)->delete();
         }
-        
+
         return $this->success([], 'Search history cleared');
     }
 
@@ -2128,7 +2124,7 @@ class ApiResurceController extends Controller
     {
         try {
             $user_id = $request->user;
-            
+
             if (!$user_id) {
                 return $this->error('User authentication required.', 401);
             }
@@ -2138,7 +2134,6 @@ class ApiResurceController extends Controller
                 ->get();
 
             return $this->success($wishlists, 'Wishlist retrieved successfully.', 200);
-
         } catch (\Exception $e) {
             return $this->error('Failed to retrieve wishlist: ' . $e->getMessage(), 500);
         }
@@ -2188,7 +2183,6 @@ class ApiResurceController extends Controller
             ]);
 
             return $this->success($wishlist, 'Product added to wishlist successfully.', 201);
-
         } catch (\Exception $e) {
             return $this->error('Failed to add to wishlist: ' . $e->getMessage(), 500);
         }
@@ -2223,7 +2217,6 @@ class ApiResurceController extends Controller
             $wishlist->delete();
 
             return $this->success(null, 'Product removed from wishlist successfully.', 200);
-
         } catch (\Exception $e) {
             return $this->error('Failed to remove from wishlist: ' . $e->getMessage(), 500);
         }
@@ -2252,7 +2245,6 @@ class ApiResurceController extends Controller
             ])->exists();
 
             return $this->success(['in_wishlist' => $exists], 'Wishlist status checked.', 200);
-
         } catch (\Exception $e) {
             return $this->error('Failed to check wishlist status: ' . $e->getMessage(), 500);
         }
@@ -2268,7 +2260,7 @@ class ApiResurceController extends Controller
         try {
             $user_id = $request->user;
             $user = null;
-            
+
             // Check if user is authenticated
             if ($user_id) {
                 $user = Administrator::find($user_id);
@@ -2349,12 +2341,12 @@ class ApiResurceController extends Controller
                 // User-specific counts
                 $manifest['counts']['total_orders'] = Order::where('user', $user->id)->count();
                 $manifest['counts']['wishlist_count'] = \App\Models\Wishlist::where('user_id', $user->id)->count();
-                
+
                 // Include full wishlist data to avoid separate API call
                 $manifest['wishlist'] = \App\Models\Wishlist::where('user_id', $user->id)
                     ->orderBy('created_at', 'desc')
                     ->get();
-                
+
                 // Unread messages count
                 $manifest['counts']['unread_messages_count'] = ChatMessage::where('receiver_id', $user->id)
                     ->where('status', '!=', 'read')->count();
@@ -2387,7 +2379,6 @@ class ApiResurceController extends Controller
                 ->get(['id', 'name', 'price_1', 'price_2', 'feature_photo', 'category']);
 
             return $this->success($manifest, 'Manifest loaded successfully.', 200);
-
         } catch (\Exception $e) {
             return $this->error('Failed to load manifest: ' . $e->getMessage(), 500);
         }
@@ -2433,12 +2424,12 @@ class ApiResurceController extends Controller
     private function getDeliveryLocations()
     {
         return DeliveryAddress::orderBy('address', 'asc')
-            ->get(['id', 'address', 'shipping_cost', ])
+            ->get(['id', 'address', 'shipping_cost',])
             ->map(function ($location) {
                 return [
                     'id' => $location->id,
                     'name' => $location->address,
-                    'shipping_cost' => $location->shipping_cost, 
+                    'shipping_cost' => $location->shipping_cost,
                 ];
             });
     }
@@ -2453,10 +2444,20 @@ class ApiResurceController extends Controller
                 return [
                     'id' => $category->id,
                     'category' => $category->category,
+                    'show_in_banner' => $category->show_in_banner ?? 'No',
                     'details' => $category->details ?? '',
                     'parent_id' => $category->parent_id ?? null,
+                    'image' => $category->image ?? '',
+                    'image_origin' => $category->image_origin ?? '',
+                    'banner_image' => $category->banner_image ?? '',
+                    'show_in_categories' => $category->show_in_categories ?? 'Yes',
+                    'attributes' => $category->attributes ?? '',
+                    'category_text' => $category->category_text ?? $category->category,
                 ];
             });
+            /* 
+
+            */
 
             return $this->success($categories, 'Categories retrieved successfully');
         } catch (\Exception $e) {
@@ -2470,12 +2471,12 @@ class ApiResurceController extends Controller
     public function popular_tags(Request $request)
     {
         $limit = $request->input('limit', 20);
-        
+
         // Get all products with tags
         $products = Product::whereNotNull('tags')
             ->where('tags', '!=', '')
             ->get(['tags']);
-            
+
         // Extract and count all tags
         $tagCounts = [];
         foreach ($products as $product) {
@@ -2487,11 +2488,11 @@ class ApiResurceController extends Controller
                 }
             }
         }
-        
+
         // Sort by popularity and return top tags
         arsort($tagCounts);
         $popularTags = array_slice(array_keys($tagCounts), 0, $limit);
-        
+
         return $this->success([
             'tags' => $popularTags,
             'total_tags' => count($tagCounts),
@@ -2506,27 +2507,27 @@ class ApiResurceController extends Controller
     {
         $tags = $request->input('tags', '');
         $perPage = $request->input('per_page', 16);
-        
+
         if (empty($tags)) {
             return $this->error('Tags parameter is required');
         }
-        
+
         // Convert tags to array
         if (is_string($tags)) {
             $tags = array_map('trim', explode(',', $tags));
         }
-        
+
         // Search products with any of the specified tags
         $query = Product::with(['specifications']);
-        
-        $query->where(function($q) use ($tags) {
+
+        $query->where(function ($q) use ($tags) {
             foreach ($tags as $tag) {
                 if (!empty(trim($tag))) {
                     $q->orWhere('tags', 'LIKE', '%' . trim($tag) . '%');
-                               }
+                }
             }
         });
-        
+
         // Order by relevance (products with more matching tags first)
         $query->orderByRaw("
             CASE 
@@ -2534,9 +2535,9 @@ class ApiResurceController extends Controller
                 ELSE 2
             END
         ");
-        
+
         $products = $query->paginate($perPage);
-        
+
         // Add computed attributes for each product
         $products->through(function ($product) {
             $product->tags_array = $product->tags_array;
@@ -2548,7 +2549,7 @@ class ApiResurceController extends Controller
             })->toArray();
             return $product;
         });
-        
+
         return $this->success($products, 'Search by tags completed successfully');
     }
 
@@ -2559,17 +2560,17 @@ class ApiResurceController extends Controller
     {
         $partial = $request->input('q', '');
         $limit = $request->input('limit', 10);
-        
+
         if (strlen($partial) < 2) {
             return $this->success([], 'Query too short');
         }
-        
+
         // Get products with tags containing the partial string
         $products = Product::whereNotNull('tags')
             ->where('tags', '!=', '')
             ->where('tags', 'LIKE', "%{$partial}%")
             ->get(['tags']);
-        
+
         // Extract matching tags
         $suggestions = collect();
         foreach ($products as $product) {
@@ -2580,10 +2581,10 @@ class ApiResurceController extends Controller
                 }
             }
         }
-        
+
         // Remove duplicates and limit results
         $suggestions = $suggestions->unique()->take($limit)->values();
-        
+
         return $this->success([
             'suggestions' => $suggestions,
             'query' => $partial

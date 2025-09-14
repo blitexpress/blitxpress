@@ -60,6 +60,13 @@ class ProductCategoryController extends AdminController
         //is_first_banner
         $grid->column('is_first_banner', __('Is First Banner'))
             ->sortable();
+        //banner_image
+        $grid->column('banner_image', __('Banner Image'))
+            ->lightbox(['width' => 50, 'height' => 50])
+            ->sortable();
+        $grid->column('image', __('Main Photo'))
+            ->lightbox(['width' => 50, 'height' => 50])
+            ->sortable();
 
         return $grid;
     }

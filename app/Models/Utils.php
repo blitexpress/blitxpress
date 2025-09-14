@@ -15,6 +15,198 @@ class Utils extends Model
 {
     use HasFactory;
 
+    static function tinyCompressImage($img)
+    {
+        $path = Utils::img_path($img);
+        $respObgj = (object)[
+            'status' => 0,
+            'message' => '',
+            'original_size_mb' => null,
+            'new_size_mb' => null,
+            'source_path' => null,
+            'destination_path' => null,
+            'source_relative_path' => null,
+            'destination_relative_path' => null,
+        ];
+        
+        if ($path == null) {
+            $respObgj->message = "Image path could not be determined.";
+            return $respObgj;
+        }
+
+        try {
+            // Set up paths
+            $respObgj->source_path = $path;
+            $respObgj->source_relative_path = $img;
+            $BASE_STORAGE_PATH = base_path() . '/public/storage/images/';
+            
+            // Get original file size
+            $originalSize = filesize($path);
+            $respObgj->original_size_mb = round($originalSize / (1024 * 1024), 2);
+            
+            // Tinify API key from environment
+            $apiKey = env('TINIFY_API_KEY');
+            if (empty($apiKey)) {
+                $respObgj->message = "Tinify API key not configured. Please set TINIFY_API_KEY in your .env file.";
+                return $respObgj;
+            }
+            
+            $img_url = Utils::img_url($img);
+            
+            // Step 1: Upload and compress the image using URL
+            $postData = json_encode([
+                'source' => [
+                    'url' => $img_url
+                ]
+            ]);
+            
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, 'https://api.tinify.com/shrink');
+            curl_setopt($ch, CURLOPT_USERPWD, 'api:' . $apiKey);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HEADER, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+
+
+            
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+
+            // Check for cURL errors first
+            if ($response === false || !empty($curlError)) {
+                $respObgj->message = "cURL Error: " . ($curlError ?: 'Unknown cURL error');
+                return $respObgj;
+            }
+            
+            if ($httpCode !== 201) {
+                $body = substr($response, $headerSize);
+                // Return the exact Tinify API error response
+                if (!empty($body)) {
+                    $respObgj->message = $body;
+                } else {
+                    $respObgj->message = "HTTP Error $httpCode: No response body from Tinify API";
+                }
+                return $respObgj;
+            }
+            
+            // Extract response body for success case
+            $body = substr($response, $headerSize);
+            $responseData = json_decode($body, true);
+            
+            if (!$responseData || !isset($responseData['output']['url'])) {
+                $respObgj->message = "Invalid response from Tinify API";
+                return $respObgj;
+            }
+            
+            $compressedUrl = $responseData['output']['url'];
+            
+            // Step 2: Download the compressed image
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $compressedUrl);
+            curl_setopt($ch, CURLOPT_USERPWD, 'api:' . $apiKey);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_BINARYTRANSFER, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+            
+            $compressedData = curl_exec($ch);
+            $downloadHttpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+            
+            if ($downloadHttpCode !== 200) {
+                if (!empty($curlError)) {
+                    $respObgj->message = "cURL Error: $curlError";
+                } else {
+                    $respObgj->message = "HTTP Error $downloadHttpCode: Failed to download compressed image from Tinify API";
+                }
+                return $respObgj;
+            }
+            
+            // Create destination path with thumb_1_ prefix
+            $originalFileName = basename($path);
+            $destinationFileName = 'thumb_1_' . $originalFileName;
+            $destinationPath = $BASE_STORAGE_PATH . $destinationFileName;
+            
+            // Save the compressed image
+            if (file_put_contents($destinationPath, $compressedData) === false) {
+                $respObgj->message = "Failed to save compressed image.";
+                return $respObgj;
+            }
+            
+            // Update response object with success data
+            $newSize = filesize($destinationPath);
+            $respObgj->new_size_mb = round($newSize / (1024 * 1024), 2);
+            $respObgj->destination_path = $destinationPath;
+            $respObgj->destination_relative_path = $destinationFileName;
+            $respObgj->status = 1;
+            $respObgj->message = "Image compressed successfully. Size reduced from {$respObgj->original_size_mb}MB to {$respObgj->new_size_mb}MB";
+            
+            return $respObgj;
+            
+        } catch (Exception $e) {
+            $respObgj->message = "Error: " . $e->getMessage();
+            return $respObgj;
+        }
+    }
+
+    static function img_path($fileName)
+    {
+        //if empty return null
+        if (empty($fileName) || $fileName == null) {
+            return null;
+        }
+
+        //get last segment after last /
+        $segments = explode('/', $fileName);
+        //if empty return or null return null
+        if (empty($fileName) || $fileName == null) {
+            return null;
+        }
+
+        $lastSegment = $segments[count($segments) - 1];
+        //if last segment is empty return null
+        if (empty($lastSegment) || $lastSegment == null) {
+            return null;
+        }
+
+        $path = base_path() . '/public/storage/images/' . $lastSegment;
+        if (!file_exists($path)) {
+            return null;
+        }
+        return $path;
+    }
+    static function img_url($fileName)
+    {
+        //if empty return null
+        if (empty($fileName) || $fileName == null) {
+            return null;
+        }
+
+        //get last segment after last /
+        $segments = explode('/', $fileName);
+        //if empty return or null return null
+        if (empty($fileName) || $fileName == null) {
+            return null;
+        }
+
+
+        $lastSegment = $segments[count($segments) - 1];
+        //if last segment is empty return null
+        if (empty($lastSegment) || $lastSegment == null) {
+            return null;
+        }
+
+        $path = url('storage/images/' . $lastSegment);
+
+        return $path;
+    }
     //get unique text
     static function get_unique_text()
     {
@@ -28,12 +220,12 @@ class Utils extends Model
         try {
             if (empty($data['email']) || !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
                 throw new Exception('Invalid or missing recipient email address.');
-            } 
+            }
             $MAIL_FROM_ADDRESS = env('MAIL_FROM_ADDRESS');
             if (empty(env('MAIL_FROM_ADDRESS')) || !filter_var(env('MAIL_FROM_ADDRESS'), FILTER_VALIDATE_EMAIL)) {
                 $MAIL_FROM_ADDRESS = "skills@comfarnet.org";
-            } 
-            $data['from_mail'] = $MAIL_FROM_ADDRESS;  
+            }
+            $data['from_mail'] = $MAIL_FROM_ADDRESS;
             Mail::send(
                 $template,
                 [
@@ -59,13 +251,13 @@ class Utils extends Model
     }
     public static function sync_orders()
     {
-        return ''; 
+        return '';
     }
 
     public static function sync_products()
     {
 
-        return; 
+        return;
     }
     public static function sendNotification(
         $msg,
