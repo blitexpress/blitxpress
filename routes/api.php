@@ -82,6 +82,7 @@ Route::prefix('pesapal')->group(function () {
     Route::post('/callback', [PesapalController::class, 'callback']); // Support both GET and POST callbacks
     Route::post('/ipn', [PesapalController::class, 'ipn'])->middleware('verify.pesapal.webhook');
     Route::get('/status/{orderId}', [PesapalController::class, 'status']);
+    Route::get('/check-pesapal-status/{orderId}', [PesapalController::class, 'status']);
     Route::post('/register-ipn', [PesapalController::class, 'registerIpn']);
     Route::get('/config', [PesapalController::class, 'config']); // New: Configuration endpoint
     Route::post('/test', [PesapalController::class, 'test']); // New: Test connectivity

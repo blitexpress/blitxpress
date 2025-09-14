@@ -73,10 +73,10 @@ class OrderController extends AdminController
                 return "<span class='badge bg-$badge_color'>$text</span>";
             });
 
-        $grid->column('amount', __('Amount'))
-            ->display(function ($amount) {
-                return 'UGX ' . number_format($amount);
-            })->sortable();
+      
+        $grid->column('order_total', __('Payable Total'))
+            ->sortable()
+            ->editable();
 
         $grid->column('payment_confirmation', __('Payment'))
             ->display(function ($payment_confirmation) {
@@ -97,10 +97,7 @@ class OrderController extends AdminController
         $grid->column('customer_phone_number_2', __('Alternate Contact'))->hide();
         $grid->column('customer_address', __('Customer Address'));
 
-        $grid->column('order_total', __('Total'))
-            ->display(function ($order_total) {
-                return 'UGX ' . number_format($order_total);
-            })->sortable()->hide();
+       
 
         // Action buttons for viewing and updating orders.
         $grid->column('view', __('View'))
@@ -196,7 +193,7 @@ class OrderController extends AdminController
         // Add custom saving hook to debug and ensure proper saving
         $form->saving(function (Form $form) {
             Log::info('Laravel Admin form saving order ' . $form->model()->id . ' with order_state: ' . request('order_state'));
-            
+
             // Ensure order_state is properly set
             if (request()->has('order_state')) {
                 $form->model()->order_state = (int) request('order_state');
@@ -208,12 +205,12 @@ class OrderController extends AdminController
         $form->saved(function (Form $form) {
             $order = $form->model();
             Log::info('Laravel Admin form saved order ' . $order->id . ' - final order_state: ' . $order->order_state);
-            
+
             // Force refresh from database to make sure it was saved
             $order->refresh();
             Log::info('After refresh, order_state is: ' . $order->order_state);
         });
-
+        $form->decimal('order_total', __('order_total')); 
         $form->disableCreatingCheck();
         $form->disableReset();
         $form->disableViewCheck();

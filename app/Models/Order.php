@@ -11,7 +11,7 @@ use Stripe\Customer;
 class Order extends Model
 {
     use HasFactory;
-    
+
     /**
      * The attributes that are mass assignable.
      */
@@ -48,7 +48,7 @@ class Order extends Model
         'payment_status',
         'payment_completed_at'
     ];
-    
+
     //boot
     public static function boot()
     {
@@ -66,7 +66,7 @@ class Order extends Model
         self::updated(function ($m) {
             // Send status-based emails when order is updated
             Log::info('Order updated: ' . $m->id . ' with state: ' . $m->order_state . ' - Checking for emails to send');
-            register_shutdown_function(function() use ($m) {
+            register_shutdown_function(function () use ($m) {
                 self::send_mails($m);
             });
         });
@@ -90,7 +90,7 @@ class Order extends Model
         return;
         try {
             Log::info("Checking emails for order {$m->id} with state {$m->order_state}");
-            
+
             $customer = User::find($m->user);
             if ($customer == null) {
                 Log::warning('Order email: Customer not found for order ID: ' . $m->id);
@@ -185,7 +185,7 @@ class Order extends Model
         ];
 
         $state = (int)$order->order_state;
-        
+
         if (!isset($stateMap[$state])) {
             Log::warning("Unknown order state {$state} for order {$order->id}");
             return null;
@@ -258,10 +258,10 @@ class Order extends Model
     public static function sendPendingEmails()
     {
         Log::info('Starting manual email send for all orders with pending emails');
-        
+
         $orders = self::whereIn('order_state', [0, 1, 2, 3, 4])->get();
         $emailsSent = 0;
-        
+
         foreach ($orders as $order) {
             $emailType = self::getEmailTypeToSend($order);
             if ($emailType) {
@@ -270,7 +270,7 @@ class Order extends Model
                 $emailsSent++;
             }
         }
-        
+
         Log::info("Manual email send completed. {$emailsSent} emails were sent.");
         return $emailsSent;
     }
@@ -544,9 +544,16 @@ EOD;
      */
     public function isPaid()
     {
-        return $this->payment_status === 'PAID' || 
-               $this->pesapal_status === 'COMPLETED' ||
-               (!empty($this->stripe_paid) && $this->stripe_paid !== 'No');
+        //payment_confirmation
+        if ($this->payment_status == 'PAID' || $this->pesapal_status == 'COMPLETED') {
+            if ($this->payment_confirmation != 'PAID') {
+                $this->payment_confirmation = 'PAID';
+                $this->save();
+            }
+            return true;
+        }
+        return $this->payment_status === 'PAID' ||
+            $this->pesapal_status === 'COMPLETED';
     }
 
     /**
@@ -554,8 +561,8 @@ EOD;
      */
     public function isPendingPayment()
     {
-        return $this->payment_status === 'PENDING_PAYMENT' || 
-               (empty($this->payment_status) && empty($this->stripe_paid));
+        return $this->payment_status === 'PENDING_PAYMENT' ||
+            (empty($this->payment_status) && empty($this->stripe_paid));
     }
 
     //get payment link
