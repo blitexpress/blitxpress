@@ -185,6 +185,7 @@ return array(
     'App\\Models\\Review' => $baseDir . '/app/Models/Review.php',
     'App\\Models\\SearchHistory' => $baseDir . '/app/Models/SearchHistory.php',
     'App\\Models\\ServiceProvider' => $baseDir . '/app/Models/ServiceProvider.php',
+    'App\\Models\\TinifyModel' => $baseDir . '/app/Models/TinifyModel.php',
     'App\\Models\\TrafficRecord' => $baseDir . '/app/Models/TrafficRecord.php',
     'App\\Models\\User' => $baseDir . '/app/Models/User.php',
     'App\\Models\\UserHasProgram' => $baseDir . '/app/Models/UserHasProgram.php',

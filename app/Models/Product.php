@@ -19,7 +19,21 @@ class Product extends Model
     protected $fillable = [
         'name', 'price', 'description', 'tags', 'local_id', 'category', 'feature_photo',
         'colors', 'keywords', 'sizes', 'summary', 'quantity', 'min_quantity_alert',
-        'review_count', 'average_rating', 'home_section_1', 'home_section_2', 'home_section_3'
+        'review_count', 'average_rating', 'home_section_1', 'home_section_2', 'home_section_3',
+        // Compression fields
+        'is_compressed', 'compress_status', 'compress_status_message', 
+        'original_size', 'compressed_size', 'compression_ratio',
+        'compression_method', 'original_image_url', 'compressed_image_url',
+        'tinify_model_id', 'compression_started_at', 'compression_completed_at'
+    ];
+
+    protected $casts = [
+        'compression_started_at' => 'datetime',
+        'compression_completed_at' => 'datetime',
+        'original_size' => 'decimal:2',
+        'compressed_size' => 'decimal:2',
+        'compression_ratio' => 'decimal:4',
+        'summary' => 'json',
     ];
 
     public static function boot()
@@ -418,11 +432,6 @@ class Product extends Model
         return $score;
     }
 
-
-    protected $casts = [
-        'summary' => 'json',
-    ];
-
     /**
      * Get product specifications relationship - TEMPORARILY DISABLED
      */
@@ -489,5 +498,47 @@ class Product extends Model
         $this->review_count = $reviews->count();
         $this->average_rating = $reviews->avg('rating') ?: 0;
         $this->save();
+    }
+
+    /**
+     * Relationship to TinifyModel used for compression
+     */
+    public function tinifyModel()
+    {
+        return $this->belongsTo(TinifyModel::class);
+    }
+
+    /**
+     * Scope for uncompressed products
+     */
+    public function scopeUncompressed($query)
+    {
+        return $query->where(function($q) {
+            $q->where('is_compressed', '!=', 'yes')
+              ->orWhereNull('is_compressed');
+        });
+    }
+
+    /**
+     * Scope for compressed products
+     */
+    public function scopeCompressed($query)
+    {
+        return $query->where('is_compressed', 'yes');
+    }
+
+    /**
+     * Get compression status display
+     */
+    public function getCompressionStatusDisplayAttribute()
+    {
+        if ($this->is_compressed === 'yes') {
+            return '✅ Compressed';
+        } elseif ($this->compress_status === 'pending') {
+            return '⏳ Pending';
+        } elseif ($this->compress_status === 'failed') {
+            return '❌ Failed';
+        }
+        return '⭕ Not Compressed';
     }
 }

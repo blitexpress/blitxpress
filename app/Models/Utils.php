@@ -1366,4 +1366,264 @@ class Utils extends Model
 
         return $qt;
     }
+
+    /**
+     * Enhanced Tinify compression with TinifyModel key management
+     * Improved version of tinyCompressImage that uses database-stored API keys
+     */
+    static function tinyCompressImageEnhanced($img, $product = null)
+    {
+        $path = Utils::img_path($img);
+        $respObgj = (object)[
+            'status' => 0,
+            'message' => '',
+            'original_size_mb' => null,
+            'new_size_mb' => null,
+            'original_size_bytes' => null,
+            'new_size_bytes' => null,
+            'compression_ratio' => null,
+            'source_path' => null,
+            'destination_path' => null,
+            'source_relative_path' => null,
+            'destination_relative_path' => null,
+            'tinify_model_id' => null,
+            'savings_percentage' => null,
+        ];
+        
+        if ($path == null) {
+            $respObgj->message = "Image path could not be determined.";
+            return $respObgj;
+        }
+
+        if (!file_exists($path)) {
+            $respObgj->message = "Image file does not exist: " . $path;
+            return $respObgj;
+        }
+
+        try {
+            // Get random active Tinify API key
+            $tinifyModel = TinifyModel::getRandomActiveKey();
+            if (!$tinifyModel) {
+                $respObgj->message = "No active Tinify API keys available. Please add API keys to the system.";
+                return $respObgj;
+            }
+
+            // Set up paths
+            $respObgj->source_path = $path;
+            $respObgj->source_relative_path = $img;
+            $respObgj->tinify_model_id = $tinifyModel->id;
+            $BASE_STORAGE_PATH = base_path() . '/public/storage/images/';
+            
+            // Get original file size
+            $originalSize = filesize($path);
+            $respObgj->original_size_bytes = $originalSize;
+            $respObgj->original_size_mb = round($originalSize / (1024 * 1024), 2);
+            
+            // Skip compression for very small files (< 50KB)
+            if ($originalSize < 50 * 1024) {
+                $respObgj->message = "File too small to compress efficiently (< 50KB). Skipping compression.";
+                return $respObgj;
+            }
+            
+            $img_url = Utils::img_url($img);
+            if (!$img_url) {
+                $respObgj->message = "Could not generate image URL for compression.";
+                return $respObgj;
+            }
+            
+            // Update product status to pending if provided
+            if ($product) {
+                $product->update([
+                    'compress_status' => 'pending',
+                    'compression_started_at' => now(),
+                    'tinify_model_id' => $tinifyModel->id,
+                    'original_size' => $originalSize,
+                    'original_image_url' => $img_url,
+                ]);
+            }
+            
+            // Step 1: Upload and compress the image using URL
+            $postData = json_encode([
+                'source' => [
+                    'url' => $img_url
+                ]
+            ]);
+            
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, 'https://api.tinify.com/shrink');
+            curl_setopt($ch, CURLOPT_USERPWD, 'api:' . $tinifyModel->api_key);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HEADER, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+
+            // Check for cURL errors first
+            if ($response === false || !empty($curlError)) {
+                $errorMsg = "cURL Error: " . ($curlError ?: 'Unknown cURL error');
+                $respObgj->message = $errorMsg;
+                
+                if ($product) {
+                    $product->update([
+                        'compress_status' => 'failed',
+                        'compress_status_message' => $errorMsg,
+                        'is_compressed' => 'yes' // Mark as processed even if failed
+                    ]);
+                }
+                return $respObgj;
+            }
+            
+            // Handle API rate limiting or errors
+            if ($httpCode === 429) {
+                $tinifyModel->markAsFailed("Rate limited - monthly quota exceeded");
+                $respObgj->message = "API rate limit exceeded for this key. Trying another key...";
+                
+                // Try with another key recursively (limit to avoid infinite recursion)
+                static $retryCount = 0;
+                if ($retryCount < 3) {
+                    $retryCount++;
+                    return self::tinyCompressImageEnhanced($img, $product);
+                }
+                
+                if ($product) {
+                    $product->update([
+                        'compress_status' => 'failed',
+                        'compress_status_message' => 'All API keys rate limited',
+                        'is_compressed' => 'yes'
+                    ]);
+                }
+                return $respObgj;
+            }
+            
+            if ($httpCode !== 201) {
+                $body = substr($response, $headerSize);
+                $errorMsg = "HTTP Error $httpCode: " . ($body ?: 'Unknown error from Tinify API');
+                $respObgj->message = $errorMsg;
+                
+                // Mark key as failed for certain errors
+                if (in_array($httpCode, [401, 403])) {
+                    $tinifyModel->markAsFailed("Authentication failed");
+                }
+                
+                if ($product) {
+                    $product->update([
+                        'compress_status' => 'failed',
+                        'compress_status_message' => $errorMsg,
+                        'is_compressed' => 'yes'
+                    ]);
+                }
+                return $respObgj;
+            }
+            
+            // Extract response body for success case
+            $body = substr($response, $headerSize);
+            $responseData = json_decode($body, true);
+            
+            if (!$responseData || !isset($responseData['output']['url'])) {
+                $respObgj->message = "Invalid response from Tinify API";
+                return $respObgj;
+            }
+            
+            $compressedUrl = $responseData['output']['url'];
+            
+            // Step 2: Download the compressed image
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $compressedUrl);
+            curl_setopt($ch, CURLOPT_USERPWD, 'api:' . $tinifyModel->api_key);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_BINARYTRANSFER, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            
+            $compressedData = curl_exec($ch);
+            $downloadHttpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+            
+            if ($downloadHttpCode !== 200) {
+                $errorMsg = !empty($curlError) ? "cURL Error: $curlError" : "HTTP Error $downloadHttpCode: Failed to download compressed image";
+                $respObgj->message = $errorMsg;
+                
+                if ($product) {
+                    $product->update([
+                        'compress_status' => 'failed',
+                        'compress_status_message' => $errorMsg,
+                        'is_compressed' => 'yes'
+                    ]);
+                }
+                return $respObgj;
+            }
+            
+            // Create destination path with compressed_ prefix
+            $originalFileName = basename($path);
+            $fileExtension = pathinfo($originalFileName, PATHINFO_EXTENSION);
+            $fileName = pathinfo($originalFileName, PATHINFO_FILENAME);
+            $destinationFileName = 'compressed_' . $fileName . '.' . $fileExtension;
+            $destinationPath = $BASE_STORAGE_PATH . $destinationFileName;
+            
+            // Save the compressed image
+            if (file_put_contents($destinationPath, $compressedData) === false) {
+                $respObgj->message = "Failed to save compressed image.";
+                return $respObgj;
+            }
+            
+            // Calculate compression metrics
+            $newSize = filesize($destinationPath);
+            $compressionRatio = $originalSize > 0 ? $newSize / $originalSize : 1;
+            $savingsPercentage = round((1 - $compressionRatio) * 100, 2);
+            
+            // Update response object with success data
+            $respObgj->new_size_bytes = $newSize;
+            $respObgj->new_size_mb = round($newSize / (1024 * 1024), 2);
+            $respObgj->compression_ratio = round($compressionRatio, 4);
+            $respObgj->savings_percentage = $savingsPercentage;
+            $respObgj->destination_path = $destinationPath;
+            $respObgj->destination_relative_path = $destinationFileName;
+            $respObgj->status = 1;
+            $respObgj->message = "Image compressed successfully. Size reduced from {$respObgj->original_size_mb}MB to {$respObgj->new_size_mb}MB ({$savingsPercentage}% savings)";
+            
+            // Mark the API key as used
+            $tinifyModel->markAsUsed();
+            
+            // Update product with successful compression data
+            if ($product) {
+                $product->update([
+                    'compress_status' => 'completed',
+                    'compression_completed_at' => now(),
+                    'is_compressed' => 'yes',
+                    'compressed_size' => $newSize,
+                    'compression_ratio' => $compressionRatio,
+                    'compression_method' => 'tinify',
+                    'compressed_image_url' => Utils::img_url($destinationFileName),
+                    'feature_photo' => $destinationFileName, // Replace with compressed image
+                    'compress_status_message' => $respObgj->message,
+                ]);
+            }
+            
+            return $respObgj;
+            
+        } catch (Exception $e) {
+            $errorMsg = "Error: " . $e->getMessage();
+            $respObgj->message = $errorMsg;
+            
+            if ($product) {
+                $product->update([
+                    'compress_status' => 'failed',
+                    'compress_status_message' => $errorMsg,
+                    'is_compressed' => 'yes'
+                ]);
+            }
+            
+            return $respObgj;
+        }
+    }
 }

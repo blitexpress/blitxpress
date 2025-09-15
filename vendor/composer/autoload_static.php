@@ -803,6 +803,7 @@ class ComposerStaticInitda89eef54c810448a827ed04bb3da82f
         'App\\Models\\Review' => __DIR__ . '/../..' . '/app/Models/Review.php',
         'App\\Models\\SearchHistory' => __DIR__ . '/../..' . '/app/Models/SearchHistory.php',
         'App\\Models\\ServiceProvider' => __DIR__ . '/../..' . '/app/Models/ServiceProvider.php',
+        'App\\Models\\TinifyModel' => __DIR__ . '/../..' . '/app/Models/TinifyModel.php',
         'App\\Models\\TrafficRecord' => __DIR__ . '/../..' . '/app/Models/TrafficRecord.php',
         'App\\Models\\User' => __DIR__ . '/../..' . '/app/Models/User.php',
         'App\\Models\\UserHasProgram' => __DIR__ . '/../..' . '/app/Models/UserHasProgram.php',

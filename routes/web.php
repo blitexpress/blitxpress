@@ -20,49 +20,193 @@ use Illuminate\Support\Facades\Route;
 }); */
 
 Route::get('img-compress', function () {
-
-    /* 
-    - We are going to use this route to periodically compress 10 uncompressed product images in the database
-    - We shall use tinify to compress images
-    - we shall compress (feature_photo) of a product
-    - You should add following nullable fields on the products table:
-        - is_compressed (string, nullable) - values: yes, no default no
-        - compress_status (string, nullable) - values: pending, completed, failed
-        - compress_status_message (text, nullable) - any message from compression service
-        - original_size (decimal, nullable) - size in bytes default 0
-        - compressed_size (decimal, nullable) - size in bytes default 0
-        - compression_ratio (decimal, nullable) - ratio of compressed to original size
-        - compression_method (string, nullable) - e.g. "tinify"
-        - original_image_url (text, nullable) - url of original image
-        - compressed_image_url (text, nullable) - url of compressed image
-    - if the compression is successful, the compressed image_url should replace the featured_image_url
-
-    */
-
-    //tinyfy api key : 8Ssgn8WJklj4svhwb4ytprMKX3rLvFHf
-    $lastUncompressedImages = \App\Models\Image::where([])->orderBy('id', 'desc')->get()->take(10);
-    foreach ($lastUncompressedImages as $img) {
-        $path = Utils::img_path($img->src);
-
-        //check if file exists
-        if (!file_exists($path)) {
-            echo "File not found: $path<br>";
-            continue;
-        }
-
-        $file_size_in_mb = filesize($path) / (1024 * 1024);
-        $file_size_in_mb = round($file_size_in_mb, 2);
-        echo "File size: {$file_size_in_mb} MB<br>";
-        $url = Utils::img_url($img->src);
-        echo '<img src="' . $url . '" alt="Image" style="max-width: 200px; margin: 10px;"><hr>';
-        $compressed = Utils::tinyCompressImage($path);
-        dd($compressed);
-
-        dd($url);
-        dd($img);
+    set_time_limit(300); // Increase time limit for processing
+    
+    // Get 10 latest uncompressed products with feature photos
+    $uncompressedProducts = \App\Models\Product::uncompressed()
+        ->whereNotNull('feature_photo')
+        ->where('feature_photo', '!=', '')
+        ->orderBy('created_at', 'desc')
+        ->limit(10)
+        ->get();
+    
+    // Check if we have any TinifyModels
+    $tinifyKeysCount = \App\Models\TinifyModel::where('is_active', true)->count();
+    
+    if ($tinifyKeysCount === 0) {
+        return response()->json([
+            'error' => 'No active Tinify API keys available. Please add API keys to the system.'
+        ], 400);
     }
-
-    dd("Not implemented yet");
+    
+    // Start building HTML response
+    $html = '<!DOCTYPE html>
+    <html>
+    <head>
+        <title>Image Compression Results</title>
+        <meta charset="utf-8">
+        <style>
+            body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+            .container { max-width: 1200px; margin: 0 auto; }
+            .header { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+            .product-card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+            .comparison { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+            .image-section { flex: 1; min-width: 300px; text-align: center; }
+            .image-section img { max-width: 100%; height: auto; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+            .stats { background: #f8f9fa; padding: 15px; border-radius: 4px; margin-top: 10px; }
+            .success { color: #28a745; font-weight: bold; }
+            .error { color: #dc3545; font-weight: bold; }
+            .pending { color: #ffc107; font-weight: bold; }
+            .size-comparison { display: flex; justify-content: space-between; margin: 10px 0; }
+            .size-item { text-align: center; flex: 1; }
+            .savings { background: #d4edda; color: #155724; padding: 10px; border-radius: 4px; margin-top: 10px; text-align: center; font-weight: bold; }
+            .progress { background: #e9ecef; border-radius: 4px; height: 20px; margin: 10px 0; position: relative; overflow: hidden; }
+            .progress-bar { background: #007bff; height: 100%; transition: width 0.3s ease; }
+            .meta-info { background: #e9ecef; padding: 10px; border-radius: 4px; margin-top: 10px; font-size: 0.9em; }
+            .no-products { text-align: center; padding: 40px; color: #666; }
+        </style>
+    </head>
+    <body>
+        <div class="container">';
+    
+    $html .= '<div class="header">
+            <h1>🗜️ Image Compression Dashboard</h1>
+            <p><strong>Available API Keys:</strong> ' . $tinifyKeysCount . ' active Tinify keys</p>
+            <p><strong>Processing:</strong> ' . count($uncompressedProducts) . ' uncompressed products</p>
+        </div>';
+    
+    if ($uncompressedProducts->isEmpty()) {
+        $html .= '<div class="no-products">
+                <h3>🎉 No uncompressed images found!</h3>
+                <p>All product images have been processed or no products with feature photos exist.</p>
+            </div>';
+    } else {
+        $totalSavings = 0;
+        $successCount = 0;
+        $failureCount = 0;
+        
+        foreach ($uncompressedProducts as $product) {
+            $html .= '<div class="product-card">';
+            $html .= '<h3>Product: ' . htmlspecialchars($product->name) . ' (ID: ' . $product->id . ')</h3>';
+            
+            // Get original image info
+            $originalPath = \App\Models\Utils::img_path($product->feature_photo);
+            $originalUrl = \App\Models\Utils::img_url($product->feature_photo);
+            
+            if (!file_exists($originalPath)) {
+                $html .= '<div class="error">❌ Original image file not found: ' . htmlspecialchars($product->feature_photo) . '</div>';
+                $failureCount++;
+                $html .= '</div>';
+                continue;
+            }
+            
+            $originalSize = filesize($originalPath);
+            $originalSizeMB = round($originalSize / (1024 * 1024), 2);
+            
+            // Start compression
+            $html .= '<div class="comparison">';
+            
+            // Original image section
+            $html .= '<div class="image-section">
+                    <h4>📸 Original Image</h4>
+                    <img src="' . $originalUrl . '" alt="Original">
+                    <div class="stats">
+                        <div><strong>Size:</strong> ' . $originalSizeMB . ' MB</div>
+                        <div><strong>File:</strong> ' . htmlspecialchars($product->feature_photo) . '</div>
+                    </div>
+                </div>';
+            
+            // Compress the image
+            $compressionResult = \App\Models\Utils::tinyCompressImageEnhanced($product->feature_photo, $product);
+            
+            // Compressed image section
+            $html .= '<div class="image-section">';
+            
+            if ($compressionResult->status == 1) {
+                $html .= '<h4>✅ Compressed Image</h4>';
+                $compressedUrl = \App\Models\Utils::img_url($compressionResult->destination_relative_path);
+                $html .= '<img src="' . $compressedUrl . '" alt="Compressed">';
+                
+                $html .= '<div class="stats">
+                        <div><strong>New Size:</strong> ' . $compressionResult->new_size_mb . ' MB</div>
+                        <div><strong>File:</strong> ' . htmlspecialchars($compressionResult->destination_relative_path) . '</div>
+                        <div><strong>API Key ID:</strong> ' . $compressionResult->tinify_model_id . '</div>
+                    </div>';
+                
+                $html .= '<div class="savings">
+                        💾 Space Saved: ' . $compressionResult->savings_percentage . '%<br>
+                        (' . ($compressionResult->original_size_mb - $compressionResult->new_size_mb) . ' MB saved)
+                    </div>';
+                
+                $totalSavings += ($compressionResult->original_size_mb - $compressionResult->new_size_mb);
+                $successCount++;
+                
+            } else {
+                $html .= '<h4>❌ Compression Failed</h4>';
+                $html .= '<div class="error">Error: ' . htmlspecialchars($compressionResult->message) . '</div>';
+                if ($compressionResult->tinify_model_id) {
+                    $html .= '<div class="meta-info">API Key ID: ' . $compressionResult->tinify_model_id . '</div>';
+                }
+                $failureCount++;
+            }
+            
+            $html .= '</div>'; // Close image-section
+            $html .= '</div>'; // Close comparison
+            
+            // Add compression metadata
+            $html .= '<div class="meta-info">
+                    <strong>Status:</strong> <span class="' . ($compressionResult->status == 1 ? 'success' : 'error') . '">';
+            $html .= $compressionResult->status == 1 ? 'SUCCESS' : 'FAILED';
+            $html .= '</span><br>';
+            $html .= '<strong>Message:</strong> ' . htmlspecialchars($compressionResult->message) . '<br>';
+            $html .= '<strong>Processed:</strong> ' . now()->format('Y-m-d H:i:s');
+            $html .= '</div>';
+            
+            $html .= '</div>'; // Close product-card
+        }
+        
+        // Summary section
+        $html .= '<div class="header">
+                <h2>📊 Compression Summary</h2>
+                <div class="size-comparison">
+                    <div class="size-item">
+                        <div style="font-size: 2em;">✅</div>
+                        <div><strong>' . $successCount . '</strong></div>
+                        <div>Successful</div>
+                    </div>
+                    <div class="size-item">
+                        <div style="font-size: 2em;">❌</div>
+                        <div><strong>' . $failureCount . '</strong></div>
+                        <div>Failed</div>
+                    </div>
+                    <div class="size-item">
+                        <div style="font-size: 2em;">💾</div>
+                        <div><strong>' . round($totalSavings, 2) . ' MB</strong></div>
+                        <div>Total Saved</div>
+                    </div>
+                </div>';
+        
+        // API Key usage stats
+        $tinifyUsageStats = \App\Models\TinifyModel::getUsageStats();
+        if (!empty($tinifyUsageStats)) {
+            $html .= '<h3>🔑 API Key Usage</h3>';
+            foreach ($tinifyUsageStats as $stats) {
+                $usagePercentage = $stats['monthly_limit'] > 0 ? ($stats['monthly_usage'] / $stats['monthly_limit']) * 100 : 0;
+                $html .= '<div style="margin: 10px 0;">
+                        <strong>Key ID ' . $stats['id'] . ':</strong> ' . $stats['monthly_usage'] . '/' . $stats['monthly_limit'] . ' (' . round($usagePercentage, 1) . '%)
+                        <div class="progress">
+                            <div class="progress-bar" style="width: ' . min($usagePercentage, 100) . '%"></div>
+                        </div>
+                    </div>';
+            }
+        }
+        
+        $html .= '</div>';
+    }
+    
+    $html .= '</div></body></html>';
+    
+    return response($html)->header('Content-Type', 'text/html');
 });
 Route::get('mail-test', function () {
 
