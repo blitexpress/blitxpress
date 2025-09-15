@@ -1442,18 +1442,18 @@ class Utils extends Model
                 ]);
             }
             
-            // Step 1: Upload and compress the image using URL
-            $postData = json_encode([
-                'source' => [
-                    'url' => $img_url
-                ]
-            ]);
+            // Step 1: Upload and compress the image using file data (more reliable than URL)
+            $imageData = file_get_contents($path);
+            if ($imageData === false) {
+                $respObgj->message = "Failed to read image file.";
+                return $respObgj;
+            }
             
             $ch = curl_init();
             curl_setopt($ch, CURLOPT_URL, 'https://api.tinify.com/shrink');
             curl_setopt($ch, CURLOPT_USERPWD, 'api:' . $tinifyModel->api_key);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $imageData);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/octet-stream']);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_HEADER, true);
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
