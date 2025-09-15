@@ -187,7 +187,7 @@ Route::get('img-compress', function () {
                 </div>';
         
         // API Key usage stats
-        $tinifyUsageStats = \App\Models\TinifyModel::getUsageStats();
+        $tinifyUsageStats = \App\Models\TinifyModel::getIndividualKeyStats();
         if (!empty($tinifyUsageStats)) {
             $html .= '<h3>🔑 API Key Usage</h3>';
             foreach ($tinifyUsageStats as $stats) {

@@ -102,4 +102,24 @@ class TinifyModel extends Model
                 ->value('available') ?? 0
         ];
     }
+
+    /**
+     * Get individual key statistics for display
+     */
+    public static function getIndividualKeyStats()
+    {
+        // Reset monthly counters if needed first
+        self::resetMonthlyCountersIfNeeded();
+        
+        return self::all()->map(function ($key) {
+            return [
+                'id' => $key->id,
+                'status' => $key->status,
+                'monthly_usage' => $key->compressions_this_month,
+                'monthly_limit' => $key->monthly_limit,
+                'total_usage' => $key->usage_count,
+                'last_used_at' => $key->last_used_at,
+            ];
+        })->toArray();
+    }
 }
