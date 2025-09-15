@@ -31,7 +31,7 @@ Route::get('img-compress', function () {
         ->get();
     
     // Check if we have any TinifyModels
-    $tinifyKeysCount = \App\Models\TinifyModel::where('is_active', true)->count();
+    $tinifyKeysCount = \App\Models\TinifyModel::where('status', 'active')->count();
     
     if ($tinifyKeysCount === 0) {
         return response()->json([
