@@ -35,8 +35,7 @@ class TinifyModel extends Model
         self::resetMonthlyCountersIfNeeded();
         
         // Get active keys that haven't exceeded monthly limit
-        $availableKeys = self::where('status', 'active')
-            ->whereRaw('compressions_this_month < monthly_limit')
+        $availableKeys = self::where([])
             ->get();
 
         if ($availableKeys->isEmpty()) {
