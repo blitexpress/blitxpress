@@ -137,4 +137,12 @@ class User extends Authenticatable implements JWTSubject
     {
         return $this->reviews()->where('product_id', $productId)->first();
     }
+
+    /**
+     * Get user's OneSignal devices
+     */
+    public function oneSignalDevices()
+    {
+        return $this->hasMany(OneSignalDevice::class);
+    }
 }

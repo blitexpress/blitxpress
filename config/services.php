@@ -41,4 +41,10 @@ return [
         'callback_url' => env('PESAPAL_CALLBACK_URL'),
     ],
 
+    'onesignal' => [
+        'app_id' => env('ONESIGNAL_APP_ID'),
+        'rest_api_key' => env('ONESIGNAL_REST_API_KEY'),
+        'android_channel_id' => env('ONESIGNAL_ANDROID_CHANNEL_ID'),
+    ],
+
 ];

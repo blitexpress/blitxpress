@@ -156,6 +156,16 @@ class Tags extends Field
      */
     public function prepare($value)
     {
+        // Handle null values to prevent TypeError
+        if (is_null($value)) {
+            $value = [];
+        }
+        
+        // Ensure value is an array before filtering
+        if (!is_array($value)) {
+            $value = [];
+        }
+        
         $value = array_filter($value, 'strlen');
 
         if ($this->keyAsValue) {

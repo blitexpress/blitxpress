@@ -19,7 +19,26 @@ use Illuminate\Support\Facades\Route;
     return response()->json(['message' => 'BlitXpress API is running']);
 }); */
 
-Route::get('img-compress-test', function () {
+Route::get('img-compress', function () {
+
+    /* 
+    - We are going to use this route to periodically compress 10 uncompressed product images in the database
+    - We shall use tinify to compress images
+    - we shall compress (feature_photo) of a product
+    - You should add following nullable fields on the products table:
+        - is_compressed (string, nullable) - values: yes, no default no
+        - compress_status (string, nullable) - values: pending, completed, failed
+        - compress_status_message (text, nullable) - any message from compression service
+        - original_size (decimal, nullable) - size in bytes default 0
+        - compressed_size (decimal, nullable) - size in bytes default 0
+        - compression_ratio (decimal, nullable) - ratio of compressed to original size
+        - compression_method (string, nullable) - e.g. "tinify"
+        - original_image_url (text, nullable) - url of original image
+        - compressed_image_url (text, nullable) - url of compressed image
+    - if the compression is successful, the compressed image_url should replace the featured_image_url
+
+    */
+
     //tinyfy api key : 8Ssgn8WJklj4svhwb4ytprMKX3rLvFHf
     $lastUncompressedImages = \App\Models\Image::where([])->orderBy('id', 'desc')->get()->take(10);
     foreach ($lastUncompressedImages as $img) {
@@ -436,3 +455,8 @@ Route::prefix('payment-test')->name('payment-test.')->group(function () {
     // 🧹 Cleanup
     Route::delete('/cleanup', [PaymentTestController::class, 'cleanupTestData'])->name('cleanup');
 });
+
+// OneSignal Push Notification Testing Dashboard
+Route::get('/onesignal-test', function () {
+    return view('onesignal-test');
+})->name('onesignal.test');
