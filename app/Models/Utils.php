@@ -1419,10 +1419,71 @@ class Utils extends Model
             $respObgj->original_size_bytes = $originalSize;
             $respObgj->original_size_mb = round($originalSize / (1024 * 1024), 2);
             
-            // Skip compression for very small files (< 50KB)
-            if ($originalSize < 50 * 1024) {
-                $respObgj->message = "File too small to compress efficiently (< 50KB). Skipping compression.";
-                return $respObgj;
+            // Handle small files (< 100KB) by creating local thumb copy
+            if ($originalSize < 100 * 1024) {
+                try {
+                    // Create destination path with compressed_ prefix
+                    $originalFileName = basename($path);
+                    $fileExtension = pathinfo($originalFileName, PATHINFO_EXTENSION);
+                    $fileName = pathinfo($originalFileName, PATHINFO_FILENAME);
+                    $destinationFileName = 'compressed_' . $fileName . '.' . $fileExtension;
+                    $destinationPath = $BASE_STORAGE_PATH . $destinationFileName;
+                    
+                    // Create a local copy as thumb
+                    if (!copy($path, $destinationPath)) {
+                        $respObgj->message = "Failed to create local thumb copy for small file.";
+                        return $respObgj;
+                    }
+                    
+                    // Calculate "compression" metrics (same size since it's a copy)
+                    $newSize = filesize($destinationPath);
+                    $compressionRatio = 1.0; // No actual compression, just a copy
+                    $savingsPercentage = 0; // No savings, but we created a thumb
+                    
+                    // Update response object with success data
+                    $respObgj->new_size_bytes = $newSize;
+                    $respObgj->new_size_mb = round($newSize / (1024 * 1024), 2);
+                    $respObgj->compression_ratio = $compressionRatio;
+                    $respObgj->savings_percentage = $savingsPercentage;
+                    $respObgj->destination_path = $destinationPath;
+                    $respObgj->destination_relative_path = $destinationFileName;
+                    $respObgj->status = 1;
+                    $respObgj->message = "Small file (< 100KB) - Created local thumb copy instead of API compression. Size: {$respObgj->original_size_mb}MB";
+                    
+                    // Mark the API key as used (minimal usage for tracking)
+                    $tinifyModel->markAsUsed();
+                    
+                    // Update product with successful "compression" data
+                    if ($product) {
+                        $product->update([
+                            'compress_status' => 'completed',
+                            'compression_completed_at' => now(),
+                            'is_compressed' => 'yes',
+                            'compressed_size' => $newSize,
+                            'compression_ratio' => $compressionRatio,
+                            'compression_method' => 'local_copy', // Different method to distinguish
+                            'compressed_image_url' => Utils::img_url($destinationFileName),
+                            'feature_photo' => $destinationFileName, // Replace with thumb copy
+                            'compress_status_message' => $respObgj->message,
+                        ]);
+                    }
+                    
+                    return $respObgj;
+                    
+                } catch (Exception $e) {
+                    $errorMsg = "Error creating local thumb: " . $e->getMessage();
+                    $respObgj->message = $errorMsg;
+                    
+                    if ($product) {
+                        $product->update([
+                            'compress_status' => 'failed',
+                            'compress_status_message' => $errorMsg,
+                            'is_compressed' => 'yes'
+                        ]);
+                    }
+                    
+                    return $respObgj;
+                }
             }
             
             $img_url = Utils::img_url($img);

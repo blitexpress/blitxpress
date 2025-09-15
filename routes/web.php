@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Route;
 }); */
 
 Route::get('img-compress', function () {
-    set_time_limit(300); // Increase time limit for processing
+    set_time_limit(300000); // Increase time limit for processing
     
     // Get 10 latest uncompressed products with feature photos
     $uncompressedProducts = \App\Models\Product::uncompressed()
