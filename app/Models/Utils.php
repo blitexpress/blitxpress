@@ -1402,8 +1402,11 @@ class Utils extends Model
 
         try {
             // Get random active Tinify API key
-            $tinifyModel = TinifyModel::getRandomActiveKey();
+            $tinifyModel = TinifyModel::where([])
+                ->inRandomOrder()
+                ->first();
             if (!$tinifyModel) {
+                die('No active Tinify API keys available. Please add API keys to the system.');
                 $respObgj->message = "No active Tinify API keys available. Please add API keys to the system.";
                 return $respObgj;
             }
