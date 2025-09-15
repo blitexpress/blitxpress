@@ -26,7 +26,7 @@ class CreateOnesignalDevicesTable extends Migration
             // $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
             
             // Composite index for faster queries
-            $table->index(['user_id', 'player_id']);
+            // $table->index(['user_id', 'player_id']);
         });
     }
 
