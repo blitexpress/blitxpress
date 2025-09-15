@@ -52,9 +52,12 @@ class AddCompressionFieldsToProductsTable extends Migration
             if (!Schema::hasColumn('products', 'compression_completed_at')) {
                 $table->timestamp('compression_completed_at')->nullable();
             }
-            
+            if (!Schema::hasColumn('products', 'tinify_model_id')) {
+                $table->foreignIdFor(TinifyModel::class)->nullable();
+            }
+
             // Foreign key to tinify_models
-            $table->foreignIdFor(TinifyModel::class)->nullable();
+
         });
     }
 
