@@ -6,7 +6,7 @@
 # Created: $(date)
 
 # Configuration
-URL="https://app.blitxpress.com/img-compress"
+URL="https://blit.blitxpress.com/img-compress"
 LOG_DIR="/Applications/MAMP/htdocs/blitxpress/storage/logs"
 LOG_FILE="$LOG_DIR/img-compress-cron.log"
 ERROR_LOG="$LOG_DIR/img-compress-cron-errors.log"

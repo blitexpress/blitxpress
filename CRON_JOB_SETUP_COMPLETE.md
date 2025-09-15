@@ -2,7 +2,7 @@
 ## Automated Endpoint Monitoring - Implementation Complete
 
 ### 🎯 Overview
-Successfully implemented a robust cron job system that pings `https://app.blitxpress.com/img-compress` every 5 minutes to ensure continuous image processing and compression.
+Successfully implemented a robust cron job system that pings `https://blit.blitxpress.com/img-compress` every 5 minutes to ensure continuous image processing and compression.
 
 ### 📁 Files Created
 
@@ -122,7 +122,7 @@ The system is largely self-maintaining, but consider:
 ### ✅ Implementation Complete
 
 The cron job system is fully operational and will:
-- Ping `https://app.blitxpress.com/img-compress` every 5 minutes
+- Ping `https://blit.blitxpress.com/img-compress` every 5 minutes
 - Log all activity with detailed status information
 - Handle errors gracefully with retry logic
 - Provide monitoring tools for system health
