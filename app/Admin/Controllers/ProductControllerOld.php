@@ -33,7 +33,7 @@ class ProductControllerOld extends AdminController
         $grid->model()->orderBy('id', 'desc');
         $grid->column('id', __('ID'))->sortable();
         $grid->column('created_at', __('Created at'))->hide();
-  /*       $grid->column('photo', __('Photo'))
+        /*       $grid->column('photo', __('Photo'))
             ->display(function ($avatar) {
                 $img = url("storage/" . $avatar);
                 $link = admin_url('members/' . $this->id);
@@ -43,17 +43,36 @@ class ProductControllerOld extends AdminController
             ->width(80)
             ->sortable();  */
         $grid->column('name', __('Product Name'))
-        ->sortable();
+            ->sortable();
         $grid->column('details', __('Details'))->hide();
         $grid->column('price', __('Price'))->sortable();
- 
-/*         $grid->column('amount', __('Amount')); */
+
+        /*         $grid->column('amount', __('Amount')); */
         /* 
         $grid->column('offer_type', __('Offer type'));
         $grid->column('state', __('State'));
         $grid->column('category', __('Category'));
         $grid->column('subcounty_id', __('Subcounty id'));
         $grid->column('district_id', __('District id')); */
+
+        $grid->column('is_compressed', __('Is Compressed'))
+            ->sortable()
+            ->filter([
+                'yes' => 'Yes',
+                'no' => 'No',
+            ])->sortable()
+            ->editable('select', ['yes' => 'Yes', 'no' => 'No']);
+        $grid->column('compress_status', __('Compress Status'));
+        $grid->column('compress_status_message', __('Compress Status Message'))->hide();
+        $grid->column('original_size', __('Original Size'))->sortable();
+        $grid->column('compressed_size', __('Compressed Size'))->sortable();
+        $grid->column('compression_ratio', __('Compression Ratio'))->sortable();
+        $grid->column('compression_method', __('Compression Method'));
+        $grid->column('original_image_url', __('Original Image URL'))->link();
+        $grid->column('compressed_image_url', __('Compressed Image URL'))->link();
+        $grid->column('tinify_model_id', __('Tinify Model ID'))->hide();
+        $grid->column('compression_started_at', __('Compression Started At'))->sortable();
+        $grid->column('compression_completed_at', __('Compression Completed At'))->sortable();
 
         return $grid;
     }
@@ -107,7 +126,7 @@ class ProductControllerOld extends AdminController
         $form->text('name', __('Product name'))->rules('required');
         $form->image('photo', __('Photo'))->rules('required');
         $form->keyValue('data');
- 
+
         /* 
         $form->radio('state', __('Item State'))->options([
             'New' => 'New',

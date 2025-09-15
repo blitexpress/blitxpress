@@ -97,6 +97,33 @@ class ProductController extends AdminController
                 return date('Y-m-d H:i:s', strtotime($created_at));
             })->sortable();
 
+
+        $grid->column('is_compressed', __('Is Compressed'))
+            ->sortable()
+            ->filter([
+                'yes' => 'Yes',
+                'no' => 'No',
+            ])->sortable()
+            ->editable('select', ['yes' => 'Yes', 'no' => 'No']);
+        $grid->column('compress_status', __('Compress Status'))
+            ->sortable()
+            ->editable('select', ['success' => 'Success', 'failed' => 'Failed'])
+            ->filter([
+                'pending' => 'Pending',
+                'in_progress' => 'In Progress',
+                'success' => 'Success',
+                'failed' => 'Failed',
+            ]);
+        $grid->column('compress_status_message', __('Compress Status Message'))->hide();
+        $grid->column('original_size', __('Original Size'))->sortable();
+        $grid->column('compressed_size', __('Compressed Size'))->sortable();
+        $grid->column('compression_ratio', __('Compression Ratio'))->sortable();
+        $grid->column('compression_method', __('Compression Method'));
+        $grid->column('original_image_url', __('Original Image URL'))->lightbox(['width' => 100, 'height' => 100])->sortable()->hide();
+        $grid->column('compressed_image_url', __('Compressed Image URL'))->lightbox(['width' => 100, 'height' => 100])->sortable()->hide();
+        $grid->column('tinify_model_id', __('Tinify Model ID'))->hide()->sortable();
+        $grid->column('compression_started_at', __('Compression Started At'))->sortable();
+        $grid->column('compression_completed_at', __('Compression Completed At'))->sortable();
         // add this as has many specifications
 
         return $grid;
