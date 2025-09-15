@@ -60,9 +60,9 @@ class CreatePesapalLogsTable extends Migration
             $table->timestamps();
             
             // Indexes for better performance
-            $table->index(['action', 'success']);
-            $table->index(['test_type', 'created_at']);
-            $table->index(['amount', 'currency']);
+            // $table->index(['action', 'success']);
+            // $table->index(['test_type', 'created_at']);
+            // $table->index(['amount', 'currency']);
         });
     }
 

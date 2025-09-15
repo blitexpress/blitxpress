@@ -33,8 +33,8 @@ class CreateNotificationModelsTable extends Migration
             $table->unsignedBigInteger('created_by')->nullable();
             $table->timestamps();
 
-            $table->index(['status', 'created_at']);
-            $table->index(['type', 'created_at']);
+            // $table->index(['status', 'created_at']);
+            // $table->index(['type', 'created_at']);
         });
     }
 
