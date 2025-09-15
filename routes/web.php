@@ -26,8 +26,8 @@ Route::get('img-compress', function () {
     $uncompressedProducts = \App\Models\Product::uncompressed()
         ->whereNotNull('feature_photo')
         ->where('feature_photo', '!=', '')
-        ->orderBy('created_at', 'desc')
-        ->limit(10)
+        ->orderBy('id', 'desc')
+        ->limit(20)
         ->get();
     
     // Check if we have any TinifyModels
