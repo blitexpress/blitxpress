@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\TinifyModel;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -35,7 +36,7 @@ class AddCompressionFieldsToProductsTable extends Migration
             $table->timestamp('compression_completed_at')->nullable();
             
             // Foreign key to tinify_models
-            $table->foreign('tinify_model_id')->references('id')->on('tinify_models')->onDelete('set null');
+            $table->foreignIdFor(TinifyModel::class)->nullable();
         });
     }
 
