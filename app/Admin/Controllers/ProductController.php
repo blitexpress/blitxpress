@@ -107,11 +107,11 @@ class ProductController extends AdminController
             ->editable('select', ['yes' => 'Yes', 'no' => 'No']);
         $grid->column('compress_status', __('Compress Status'))
             ->sortable()
-            ->editable()
+            ->editable('select', ['completed' => 'Success', 'failed' => 'Failed'])
             ->filter([
                 'pending' => 'Pending',
                 'in_progress' => 'In Progress',
-                'success' => 'Success',
+                'completed' => 'Success',
                 'failed' => 'Failed',
             ]);
         $grid->column('compress_status_message', __('Compress Status Message'))->hide();
