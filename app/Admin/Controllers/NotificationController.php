@@ -185,16 +185,19 @@ class NotificationController extends AdminController
             return \Carbon\Carbon::parse($created_at)->format('M d, Y H:i');
         })->sortable();
 
-        // Enhanced actions
-        $grid->actions(function ($actions) {
-            // Add send action for unsent notifications
-            if ($actions->row->status !== 'sent' && $actions->row->status !== 'sending') {
-                $actions->append('<a href="' . url('do-send-notofocation?id=' . $actions->row->id) . '" 
+        $grid->column('send', __('send'))->display(function ($created_at) {
+            if ($this->status !== 'pending' && $this->status !== 'scheduled') {
+                return '<span class="text-muted">N/A</span>';
+            }
+            if ($this->status == 'sent') {
+                return '<span class="text-muted">N/A</span>';
+            }
+            $link = '<a href="' . url('do-send-notofocation?id=' . $this->id) . '" 
                     class="btn btn-xs btn-success" title="Send Notification">
                     <i class="fa fa-paper-plane"></i> Send
-                </a>');
-            }
-        });
+                </a>';
+            return $link;
+        })->sortable();
 
         // Enhanced bulk actions
         $grid->tools(function ($tools) {
@@ -318,7 +321,7 @@ class NotificationController extends AdminController
         ])->default('general');
 
         $form->divider('Target Audience');
-        
+
         $form->radio('target_type', __('Send To'))->options([
             'all' => 'All Registered Users',
             'active' => 'Active Users (Last 30 days)',
@@ -326,23 +329,23 @@ class NotificationController extends AdminController
             'segments' => 'OneSignal Segments',
             'devices' => 'Device Types',
         ])->default('all')
-        ->when('specific', function (Form $form) {
-            $form->multipleSelect('target_users', __('Select Users'))
-                ->options(User::pluck('name', 'id'))
-                ->help('Choose specific users to send notification to');
-        })
-        ->when('segments', function (Form $form) {
-            $form->tags('target_segments', __('Segments'))
-                ->help('Enter OneSignal segments (e.g., All, Active Users, Premium Users)');
-        })
-        ->when('devices', function (Form $form) {
-            $form->checkbox('target_devices', __('Device Types'))->options([
-                'android' => 'Android Devices',
-                'ios' => 'iOS Devices',
-                'web' => 'Web Push',
-            ])->help('Select device types to target');
-        });
-/* 
+            ->when('specific', function (Form $form) {
+                $form->multipleSelect('target_users', __('Select Users'))
+                    ->options(User::pluck('name', 'id'))
+                    ->help('Choose specific users to send notification to');
+            })
+            ->when('segments', function (Form $form) {
+                $form->tags('target_segments', __('Segments'))
+                    ->help('Enter OneSignal segments (e.g., All, Active Users, Premium Users)');
+            })
+            ->when('devices', function (Form $form) {
+                $form->checkbox('target_devices', __('Device Types'))->options([
+                    'android' => 'Android Devices',
+                    'ios' => 'iOS Devices',
+                    'web' => 'Web Push',
+                ])->help('Select device types to target');
+            });
+        /* 
 
 id
 title
