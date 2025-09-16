@@ -8,8 +8,8 @@ use App\Models\Gen;
 use App\Models\Order;
 use App\Models\Utils;
 use Carbon\Carbon;
-use Dflydev\DotAccessData\Util;
 use Illuminate\Http\Request;
+use Dflydev\DotAccessData\Util;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
@@ -19,9 +19,41 @@ use Illuminate\Support\Facades\Route;
     return response()->json(['message' => 'BlitXpress API is running']);
 }); */
 
+Route::get('do-send-notofocation', function (Request $r) {
+    try {
+        $notificationId = $r->input('id');
+        
+        if (!$notificationId) {
+            return redirect()->back()->with('error', 'Notification ID is required');
+        }
+        
+        $notification = \App\Models\NotificationModel::find($notificationId);
+        
+        if (!$notification) {
+            return redirect()->back()->with('error', 'Notification not found');
+        }
+        
+        // Check if already sent
+        if ($notification->status === 'sent') {
+            return redirect()->back()->with('warning', 'Notification has already been sent');
+        }
+        
+        // Send the notification
+        $result = $notification->send();
+        
+        if ($result['success']) {
+            return redirect()->back()->with('success', 'Notification sent successfully! Recipients: ' . ($result['recipients'] ?? 'N/A'));
+        } else {
+            return redirect()->back()->with('error', 'Failed to send notification: ' . $result['error']);
+        }
+        
+    } catch (\Exception $e) {
+        return redirect()->back()->with('error', 'Error: ' . $e->getMessage());
+    }
+});
 Route::get('img-compress', function () {
     set_time_limit(300000); // Increase time limit for processing
-    
+
     // Get 10 latest uncompressed products with feature photos
     $uncompressedProducts = \App\Models\Product::uncompressed()
         ->whereNotNull('feature_photo')
@@ -29,16 +61,16 @@ Route::get('img-compress', function () {
         ->orderBy('id', 'desc')
         ->limit(20)
         ->get();
-    
+
     // Check if we have any TinifyModels
     $tinifyKeysCount = \App\Models\TinifyModel::where('status', 'active')->count();
-    
+
     if ($tinifyKeysCount === 0) {
         return response()->json([
             'error' => 'No active Tinify API keys available. Please add API keys to the system.'
         ], 400);
     }
-    
+
     // Start building HTML response
     $html = '<!DOCTYPE html>
     <html>
@@ -68,13 +100,13 @@ Route::get('img-compress', function () {
     </head>
     <body>
         <div class="container">';
-    
+
     $html .= '<div class="header">
             <h1>🗜️ Image Compression Dashboard</h1>
             <p><strong>Available API Keys:</strong> ' . $tinifyKeysCount . ' active Tinify keys</p>
             <p><strong>Processing:</strong> ' . count($uncompressedProducts) . ' uncompressed products</p>
         </div>';
-    
+
     if ($uncompressedProducts->isEmpty()) {
         $html .= '<div class="no-products">
                 <h3>🎉 No uncompressed images found!</h3>
@@ -84,28 +116,28 @@ Route::get('img-compress', function () {
         $totalSavings = 0;
         $successCount = 0;
         $failureCount = 0;
-        
+
         foreach ($uncompressedProducts as $product) {
             $html .= '<div class="product-card">';
             $html .= '<h3>Product: ' . htmlspecialchars($product->name) . ' (ID: ' . $product->id . ')</h3>';
-            
+
             // Get original image info
             $originalPath = \App\Models\Utils::img_path($product->feature_photo);
             $originalUrl = \App\Models\Utils::img_url($product->feature_photo);
-            
+
             if (!file_exists($originalPath)) {
                 $html .= '<div class="error">❌ Original image file not found: ' . htmlspecialchars($product->feature_photo) . '</div>';
                 $failureCount++;
                 $html .= '</div>';
                 continue;
             }
-            
+
             $originalSize = filesize($originalPath);
             $originalSizeMB = round($originalSize / (1024 * 1024), 2);
-            
+
             // Start compression
             $html .= '<div class="comparison">';
-            
+
             // Original image section
             $html .= '<div class="image-section">
                     <h4>📸 Original Image</h4>
@@ -115,32 +147,31 @@ Route::get('img-compress', function () {
                         <div><strong>File:</strong> ' . htmlspecialchars($product->feature_photo) . '</div>
                     </div>
                 </div>';
-            
+
             // Compress the image
             $compressionResult = \App\Models\Utils::tinyCompressImageEnhanced($product->feature_photo, $product);
-            
+
             // Compressed image section
             $html .= '<div class="image-section">';
-            
+
             if ($compressionResult->status == 1) {
                 $html .= '<h4>✅ Compressed Image</h4>';
                 $compressedUrl = \App\Models\Utils::img_url($compressionResult->destination_relative_path);
                 $html .= '<img src="' . $compressedUrl . '" alt="Compressed">';
-                
+
                 $html .= '<div class="stats">
                         <div><strong>New Size:</strong> ' . $compressionResult->new_size_mb . ' MB</div>
                         <div><strong>File:</strong> ' . htmlspecialchars($compressionResult->destination_relative_path) . '</div>
                         <div><strong>API Key ID:</strong> ' . $compressionResult->tinify_model_id . '</div>
                     </div>';
-                
+
                 $html .= '<div class="savings">
                         💾 Space Saved: ' . $compressionResult->savings_percentage . '%<br>
                         (' . ($compressionResult->original_size_mb - $compressionResult->new_size_mb) . ' MB saved)
                     </div>';
-                
+
                 $totalSavings += ($compressionResult->original_size_mb - $compressionResult->new_size_mb);
                 $successCount++;
-                
             } else {
                 $html .= '<h4>❌ Compression Failed</h4>';
                 $html .= '<div class="error">Error: ' . htmlspecialchars($compressionResult->message) . '</div>';
@@ -149,10 +180,10 @@ Route::get('img-compress', function () {
                 }
                 $failureCount++;
             }
-            
+
             $html .= '</div>'; // Close image-section
             $html .= '</div>'; // Close comparison
-            
+
             // Add compression metadata
             $html .= '<div class="meta-info">
                     <strong>Status:</strong> <span class="' . ($compressionResult->status == 1 ? 'success' : 'error') . '">';
@@ -161,10 +192,10 @@ Route::get('img-compress', function () {
             $html .= '<strong>Message:</strong> ' . htmlspecialchars($compressionResult->message) . '<br>';
             $html .= '<strong>Processed:</strong> ' . now()->format('Y-m-d H:i:s');
             $html .= '</div>';
-            
+
             $html .= '</div>'; // Close product-card
         }
-        
+
         // Summary section
         $html .= '<div class="header">
                 <h2>📊 Compression Summary</h2>
@@ -185,7 +216,7 @@ Route::get('img-compress', function () {
                         <div>Total Saved</div>
                     </div>
                 </div>';
-        
+
         // API Key usage stats
         $tinifyUsageStats = \App\Models\TinifyModel::getIndividualKeyStats();
         if (!empty($tinifyUsageStats)) {
@@ -200,12 +231,12 @@ Route::get('img-compress', function () {
                     </div>';
             }
         }
-        
+
         $html .= '</div>';
     }
-    
+
     $html .= '</div></body></html>';
-    
+
     return response($html)->header('Content-Type', 'text/html');
 });
 Route::get('mail-test', function () {

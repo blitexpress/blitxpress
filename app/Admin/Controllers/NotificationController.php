@@ -187,8 +187,13 @@ class NotificationController extends AdminController
 
         // Enhanced actions
         $grid->actions(function ($actions) {
-            // Only show basic edit/view actions for now
-            // Custom actions can be added later with proper RowAction classes
+            // Add send action for unsent notifications
+            if ($actions->row->status !== 'sent' && $actions->row->status !== 'sending') {
+                $actions->append('<a href="' . url('do-send-notofocation?id=' . $actions->row->id) . '" 
+                    class="btn btn-xs btn-success" title="Send Notification">
+                    <i class="fa fa-paper-plane"></i> Send
+                </a>');
+            }
         });
 
         // Enhanced bulk actions
