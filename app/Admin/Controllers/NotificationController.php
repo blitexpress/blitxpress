@@ -192,7 +192,7 @@ class NotificationController extends AdminController
             if ($this->status == 'sent') {
                 return '<span class="text-muted">N/A</span>';
             }
-            $link = '<a href="' . url('do-send-notofocation?id=' . $this->id) . '" 
+            $link = '<a href="' . url('do-send-notofocation?id=' . $this->id) . '"  target="_blank" rel="noopener"
                     class="btn btn-xs btn-success" title="Send Notification">
                     <i class="fa fa-paper-plane"></i> Send
                 </a>';
