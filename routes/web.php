@@ -22,33 +22,32 @@ use Illuminate\Support\Facades\Route;
 Route::get('do-send-notofocation', function (Request $r) {
     try {
         $notificationId = $r->input('id');
-        
+
         if (!$notificationId) {
             return redirect()->back()->with('error', 'Notification ID is required');
         }
-        
+
         $notification = \App\Models\NotificationModel::find($notificationId);
-        
+
         if (!$notification) {
             return redirect()->back()->with('error', 'Notification not found');
         }
-        
+
         // Check if already sent
         if ($notification->status === 'sent') {
-            return redirect()->back()->with('warning', 'Notification has already been sent');
+            return ('warning: ' . 'Notification has already been sent');
         }
-        
+
         // Send the notification
         $result = $notification->send();
-        
+
         if ($result['success']) {
-            return redirect()->back()->with('success', 'Notification sent successfully! Recipients: ' . ($result['recipients'] ?? 'N/A'));
+            return ('success: ' . 'Notification sent successfully! Recipients: ' . ($result['recipients'] ?? 'N/A'));
         } else {
-            return redirect()->back()->with('error', 'Failed to send notification: ' . $result['error']);
+            return ('error: ' . 'Failed to send notification: ' . $result['error']);
         }
-        
     } catch (\Exception $e) {
-        return redirect()->back()->with('error', 'Error: ' . $e->getMessage());
+        return ('error: ' . 'Error: ' . $e->getMessage());
     }
 });
 Route::get('img-compress', function () {
