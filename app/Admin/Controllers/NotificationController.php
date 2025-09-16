@@ -164,13 +164,20 @@ class NotificationController extends AdminController
 
         $grid->column('recipients', __('Recipients'))->badge('green')->help('Number of devices that received the notification');
 
-        $grid->column('status', __('Status'))->label([
-            'pending' => 'default',
-            'sent' => 'success',
-            'failed' => 'danger',
-            'cancelled' => 'warning',
-            'scheduled' => 'info',
-        ]);
+        $grid->column('status', __('Status'))
+        ->filter([
+            'pending' => 'pending',
+            'sent' => 'sent',
+            'failed' => 'failed',
+            'cancelled' => 'cancelled',
+            'scheduled' => 'scheduled',
+        ])->editable('select', [
+            'pending' => 'Pending',
+            'sent' => 'Sent',
+            'failed' => 'Failed',
+            'cancelled' => 'Cancelled',
+            'scheduled' => 'Scheduled',
+        ])->sortable();
 
         $grid->column("delivery_stats", __("Performance"))->display(function () {
             if ($this->status !== "sent") return "-";
@@ -462,7 +469,15 @@ sent_at
 
         // Hidden fields
         $form->hidden('created_by')->default(Auth::id());
-        $form->hidden('status')->default('pending');
+        $form->radio('status')
+            ->options([
+                'pending' => 'Pending',
+                'sent' => 'Sent',
+                'failed' => 'Failed',
+                'cancelled' => 'Cancelled',
+                'scheduled' => 'Scheduled',
+            ])
+            ->default('pending');
 
         // Custom JavaScript for template loading
         $form->html('
@@ -728,6 +743,8 @@ sent_at
             return $country ? strtoupper($country) : '-';
         });
         $grid->column('status_badge', 'Status')->display(function () {
+            return $this->getStatusBadgeAttribute();
+        });        $grid->column('status_badge', 'Status')->display(function () {
             return $this->getStatusBadgeAttribute();
         });
         $grid->column('last_seen_format', 'Last Seen');
