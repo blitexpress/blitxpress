@@ -138,6 +138,11 @@ class OneSignalService
             'contents' => ['en' => $message],
         ];
 
+        // Add Android channel ID if available
+        if ($this->androidChannelId) {
+            $payload['android_channel_id'] = $this->androidChannelId;
+        }
+
         if (!empty($data)) {
             $payload['data'] = $data;
         }
@@ -180,6 +185,11 @@ class OneSignalService
             'headings' => ['en' => $title],
             'contents' => ['en' => $message],
         ];
+
+        // Add Android channel ID if available
+        if ($this->androidChannelId) {
+            $payload['android_channel_id'] = $this->androidChannelId;
+        }
 
         if (!empty($data)) {
             $payload['data'] = $data;
@@ -224,6 +234,11 @@ class OneSignalService
             'headings' => ['en' => $title],
             'contents' => ['en' => $message],
         ];
+
+        // Add Android channel ID if available
+        if ($this->androidChannelId) {
+            $payload['android_channel_id'] = $this->androidChannelId;
+        }
 
         if ($subtitle) {
             $payload['subtitle'] = ['en' => $subtitle];

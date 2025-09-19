@@ -278,7 +278,7 @@ class Utils extends Model
             );
             $client->addParams(
                 [
-                    'android_channel_id' => 'a79a1fa6-8991-4c23-97b9-2cf23d697b48',
+                    'android_channel_id' => env('ONESIGNAL_ANDROID_CHANNEL_ID'),
                     'large_icon' => env('APP_URL') . '/assets/logo.png',
                     'small_icon' => 'logo',
                 ]
