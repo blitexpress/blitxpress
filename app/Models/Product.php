@@ -100,15 +100,30 @@ class Product extends Model
 
         return;
     }
-    // Removed getRatesAttribute to prevent memory issues
-    // public function getRatesAttribute()
-    // {
-    //     $imgs = Image::where('parent_id', $this->id)->orwhere('product_id', $this->id)->get();
-    //     return json_encode($imgs);
-    // }
+    
+    // Memory-safe getRatesAttribute implementation
+    public function getRatesAttribute()
+    {
+        try {
+            // Limit to 10 images maximum to prevent memory issues
+            $imgs = Image::where('product_id', $this->id)
+                ->limit(10)
+                ->select(['id', 'src', 'thumbnail', 'product_id'])
+                ->get();
+            
+            if ($imgs->isEmpty()) {
+                return json_encode([]);
+            }
+            
+            return json_encode($imgs);
+        } catch (\Throwable $th) {
+            // Return empty array on error to prevent crashes
+            return json_encode([]);
+        }
+    }
 
 
-    protected $appends = ['category_text', 'tags_array'];
+    protected $appends = ['category_text', 'tags_array', 'rates'];
     public function getCategoryTextAttribute()
     {
         $d = ProductCategory::find($this->category);
