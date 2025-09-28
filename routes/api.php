@@ -31,6 +31,7 @@ Route::post("orders-create", [ApiResurceController::class, "orders_create"]);
 Route::post("orders-with-payment", [ApiResurceController::class, "orders_with_payment"]);
 Route::post("product-create", [ApiResurceController::class, "product_create"]);
 Route::get("orders", [ApiResurceController::class, "orders_get"]);
+Route::get('orders/check-pending-emails', [ApiResurceController::class, 'check_and_send_pending_emails']);
 Route::get("orders/{id}", [ApiResurceController::class, "orders_get_by_id"]);
 Route::get("products/{id}", [ApiResurceController::class, "product_get_by_id"]);
 Route::get("order", [ApiResurceController::class, "order"]);

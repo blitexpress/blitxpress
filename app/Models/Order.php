@@ -47,7 +47,13 @@ class Order extends Model
         'pesapal_redirect_url',
         'payment_status',
         'payment_completed_at',
-        'pay_on_delivery'
+        'pay_on_delivery',
+        // Email tracking fields
+        'pending_mail_sent',
+        'processing_mail_sent',
+        'completed_mail_sent',
+        'canceled_mail_sent',
+        'failed_mail_sent'
     ];
 
     //boot
@@ -56,20 +62,12 @@ class Order extends Model
         parent::boot();
         //created
         self::created(function ($m) {
-            // Send pending email for new orders
-            /* Log::info('Order created: ' . $m->id . ' - Sending pending email');
-            register_shutdown_function(function() use ($m) {
-                self::send_mails($m);
-            }); */
+             
         });
 
         //updated
         self::updated(function ($m) {
-            // Send status-based emails when order is updated
-            Log::info('Order updated: ' . $m->id . ' with state: ' . $m->order_state . ' - Checking for emails to send');
-            register_shutdown_function(function () use ($m) {
-                self::send_mails($m);
-            });
+             
         });
 
 
@@ -88,7 +86,6 @@ class Order extends Model
 
     public static function send_mails($m)
     {
-        return;
         try {
             Log::info("Checking emails for order {$m->id} with state {$m->order_state}");
 

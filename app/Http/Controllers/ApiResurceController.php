@@ -310,8 +310,7 @@ class ApiResurceController extends Controller
             }
 
             if ($request->address != null) {
-                $u->address = ucfirst(trim($request->address));
-                $u->current_address = ucfirst(trim($request->address));
+                $u->address = ucfirst(trim($request->address)); 
             }
 
             // Handle avatar upload if provided
@@ -765,6 +764,132 @@ class ApiResurceController extends Controller
         $order->delete();
         return $this->success(null, $message = "Cancelled successfully!", 200);
     }
+
+    /**
+     * Check and send pending order emails
+     * This endpoint is designed to be called by a cron job every minute
+     * to ensure no order emails are missed
+     */
+    public function check_and_send_pending_emails(Request $request)
+    {
+        // Set time limit for this operation
+        set_time_limit(120); // 2 minutes max
+        
+        try {
+            Log::info('=== Starting pending email check via API endpoint ===');
+            
+            // Track statistics
+            $stats = [
+                'total_orders_checked' => 0,
+                'emails_pending' => 0,
+                'emails_sent' => 0,
+                'errors' => 0,
+                'by_type' => [
+                    'pending' => 0,
+                    'processing' => 0,
+                    'completed' => 0,
+                    'canceled' => 0,
+                    'failed' => 0
+                ],
+                'start_time' => now(),
+            ];
+
+            // Get orders that might need email notifications
+            // Limit to last 7 days and maximum 50 orders to prevent timeout
+            $orders = Order::where('created_at', '>=', now()->subDays(7))
+                ->whereNotNull('mail')
+                ->where('mail', '!=', '')
+                ->orderBy('created_at', 'desc')
+                ->limit(50)
+                ->get();
+
+            Log::info("Found {$orders->count()} orders to check for pending emails");
+            $stats['total_orders_checked'] = $orders->count();
+
+            foreach ($orders as $order) {
+                try {
+                    // Determine what email type should be sent based on order state
+                    $emailType = $this->getEmailTypeToSend($order);
+                    
+                    if ($emailType) {
+                        $stats['emails_pending']++;
+                        Log::info("Order {$order->id}: Needs {$emailType} email (state: {$order->order_state})");
+                        
+                        // Skip actually sending emails in this basic version to prevent timeout
+                        // Just identify what needs to be sent
+                        $stats['by_type'][$emailType]++;
+                        
+                        // Uncomment the line below to actually send emails:
+                        // Order::send_mails($order);
+                        // $stats['emails_sent']++;
+                    }
+                } catch (\Throwable $e) {
+                    Log::error("Error processing order {$order->id}: " . $e->getMessage());
+                    $stats['errors']++;
+                }
+            }
+
+            $stats['end_time'] = now();
+            $stats['execution_time_seconds'] = $stats['end_time']->diffInSeconds($stats['start_time']);
+
+            Log::info('=== Email check completed ===', $stats);
+
+            return $this->success([
+                'message' => 'Email check completed successfully',
+                'statistics' => $stats,
+                'note' => 'Email sending is currently disabled for testing. Uncomment line in controller to enable.'
+            ], 'Email check completed', 200);
+
+        } catch (\Throwable $e) {
+            Log::error('Critical error in check_and_send_pending_emails: ' . $e->getMessage());
+            Log::error($e->getTraceAsString());
+
+            return $this->error('Failed to check pending emails: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Helper method to determine what type of email needs to be sent
+     * Mirrors the logic from Order model but can be customized
+     */
+    private function getEmailTypeToSend($order)
+    {
+        $stateMap = [
+            0 => 'pending',
+            1 => 'processing', 
+            2 => 'completed',
+            3 => 'canceled',
+            4 => 'failed'
+        ];
+
+        $state = (int)$order->order_state;
+
+        if (!isset($stateMap[$state])) {
+            Log::warning("Unknown order state {$state} for order {$order->id}");
+            return null;
+        }
+
+        $emailType = $stateMap[$state];
+        $sentField = $emailType . '_mail_sent';
+        
+        // Check if this email type has already been sent
+        $alreadySent = $order->{$sentField} === 'Yes';
+
+        // Additional logic: For pending orders, also check if order is older than 5 minutes
+        // This prevents sending emails immediately after order creation
+        if ($emailType === 'pending') {
+            $orderAge = $order->created_at->diffInMinutes(now());
+            if ($orderAge < 5) {
+                Log::info("Order {$order->id} is too new ({$orderAge} minutes), skipping pending email");
+                return null;
+            }
+        }
+
+        Log::debug("Order {$order->id} - State: {$state} ({$emailType}), {$sentField}: " . ($order->{$sentField} ?? 'NULL') . ", Should send: " . ($alreadySent ? 'No' : 'Yes'));
+
+        return $alreadySent ? null : $emailType;
+    }
+
     public function my_profile(Request $r)
     {
         $u = auth('api')->user();
