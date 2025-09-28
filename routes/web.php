@@ -24,30 +24,30 @@ Route::get('do-send-notofocation', function (Request $r) {
         $notificationId = $r->input('id');
 
         if (!$notificationId) {
-            dd('error', 'Notification ID is required');
+            return redirect()->back()->with('error', 'Notification ID is required');
         }
 
         $notification = \App\Models\NotificationModel::find($notificationId);
 
         if (!$notification) {
-            dd('error', 'Notification not found');
+            return redirect()->back()->with('error', 'Notification not found');
         }
 
         // Check if already sent
         if ($notification->status === 'sent') {
-            dd('warning: ' . 'Notification has already been sent');
+            return ('warning: ' . 'Notification has already been sent');
         }
 
         // Send the notification
         $result = $notification->send();
 
         if ($result['success']) {
-            dd('success: ' . 'Notification sent successfully! Recipients: ' . ($result['recipients'] ?? 'N/A'));
+            return ('success: ' . 'Notification sent successfully! Recipients: ' . ($result['recipients'] ?? 'N/A'));
         } else {
-            dd('error: ' . 'Failed to send notification: ' . $result['error']);
+            return ('error: ' . 'Failed to send notification: ' . $result['error']);
         }
     } catch (\Exception $e) {
-        dd('error: ' . 'Error: ' . $e->getMessage());
+        return ('error: ' . 'Error: ' . $e->getMessage());
     }
 });
 Route::get('img-compress', function () {
