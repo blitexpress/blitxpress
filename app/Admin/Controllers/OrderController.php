@@ -4,6 +4,8 @@ namespace App\Admin\Controllers;
 
 use App\Models\DeliveryAddress;
 use App\Models\Order;
+use App\Models\OrderedItem;
+use App\Models\Product;
 use App\Models\User;
 use App\Models\Utils;
 use Encore\Admin\Controllers\AdminController;
@@ -30,65 +32,87 @@ class OrderController extends AdminController
     {
         $grid = new Grid(new Order());
         $grid->model()->orderBy('id', 'desc');
-        $grid->quickSearch('customer_name')->placeholder('Search by customer name');
+        
+        // Enable pagination and set per page options
+        $grid->perPages([10, 20, 30, 50, 100]);
+        $grid->paginate(20);
+        
+        // Add quick search functionality
+        $grid->quickSearch('customer_name', 'customer_phone_number_1', 'mail', 'id')
+             ->placeholder('Search by name, phone, email, or ID');
 
         $grid->column('id', __('ID'))->sortable();
 
         $grid->column('created_at', __('Created'))
             ->display(function ($created_at) {
-                return Utils::my_date_time($created_at);
+                if (!$created_at) return 'N/A';
+                try {
+                    return Utils::my_date_time($created_at);
+                } catch (\Exception $e) {
+                    return date('M d, Y H:i', strtotime($created_at));
+                }
             })->sortable();
 
         $grid->column('user', __('User'))
             ->display(function ($user) {
-                $u = User::find($user);
-                return $u ? $u->name : "Unknown";
+                if (!$user) return 'Guest';
+                try {
+                    $u = User::find($user);
+                    return $u ? $u->name : "Unknown User";
+                } catch (\Exception $e) {
+                    return 'Error loading user';
+                }
             })->sortable()->hide();
 
         $grid->column('order_state', __('Order State'))
             ->sortable()
-            ->display(function ($x) {
-                $badge_color = "primary";
-                if ($x == 1) {
-                    $badge_color = "warning";
-                } else if ($x == 2) {
-                    $badge_color = "info";
-                } else if ($x == 3) {
-                    $badge_color = "success";
-                } else if ($x == 4 || $x == 5) {
-                    $badge_color = "danger";
-                }
-                $text = 'Pending';
-                if ($x == 0) {
-                    $text = 'Pending';
-                } else if ($x == 1) {
-                    $text = 'Processing';
-                } else if ($x == 2) {
-                    $text = 'Completed';
-                } else if ($x == 3) {
-                    $text = 'Canceled';
-                } else {
-                    $text = 'Failed';
-                }
-                return "<span class='badge bg-$badge_color'>$text</span>";
+            ->display(function ($order_state) {
+                // Ensure we have a valid state value
+                $state = intval($order_state ?? 0);
+                
+                $statuses = [
+                    0 => ['text' => 'Pending', 'color' => 'warning'],
+                    1 => ['text' => 'Processing', 'color' => 'info'],
+                    2 => ['text' => 'Completed', 'color' => 'success'],
+                    3 => ['text' => 'Cancelled', 'color' => 'danger'],
+                    4 => ['text' => 'Failed', 'color' => 'danger'],
+                    5 => ['text' => 'Refunded', 'color' => 'secondary']
+                ];
+                
+                $status = $statuses[$state] ?? ['text' => 'Unknown', 'color' => 'secondary'];
+                return "<span class='badge bg-{$status['color']}'>{$status['text']}</span>";
             });
 
       
         $grid->column('order_total', __('Payable Total'))
+            ->display(function ($order_total) {
+                $amount = floatval($order_total ?? 0);
+                return 'UGX ' . number_format($amount, 0);
+            })
             ->sortable()
             ->editable();
 
         $grid->column('payment_confirmation', __('Payment'))
             ->display(function ($payment_confirmation) {
-                return empty($payment_confirmation) ? "Not Paid" : $payment_confirmation;
+                if (empty($payment_confirmation) || $payment_confirmation === null) {
+                    return "<span class='badge bg-warning'>Not Paid</span>";
+                }
+                return "<span class='badge bg-success'>Paid</span>";
             })->sortable();
 
         $grid->column('mail', __('Mail'))->sortable()->hide();
 
         $grid->column('delivery_district', __('Delivery'))
-            ->display(function ($delivery_district) {
-                $delivery_district = DeliveryAddress::find($delivery_district);
-                return $delivery_district ? $delivery_district->address : "Unknown";
+            ->display(function ($delivery_district_id) {
+                if (!$delivery_district_id || $delivery_district_id === '') {
+                    return '<span class="text-muted">No address</span>';
+                }
+                try {
+                    $delivery_address = DeliveryAddress::find($delivery_district_id);
+                    return $delivery_address ? $delivery_address->address : "Address not found";
+                } catch (\Exception $e) {
+                    return 'Error loading address';
+                }
             })->sortable();
 
         $grid->column('description', __('Description'))->hide();
@@ -99,35 +123,125 @@ class OrderController extends AdminController
 
        
 
-        // Action buttons for viewing and updating orders.
-        $grid->column('view', __('View'))
-            ->display(function () {
-                $order = Order::find($this->id);
-                $link = admin_url('orders/' . $order->id);
-                return "<a href='$link' class='btn btn-info btn-sm'>View</a>";
-            });
+        // Remove custom action columns - Laravel Admin provides these automatically
+        // If you need custom actions, they should be added through the actions() method
+        
+        // Configure actions
+        $grid->actions(function ($actions) {
+            $actions->disableEdit(false);
+            $actions->disableView(false); // Keep default view available
+            $actions->disableDelete(true); // Disable delete for orders for safety
+            
+            // Add custom enhanced view action
+            $actions->append('<a href="' . admin_url('orders/' . $actions->getKey() . '/detail') . '" class="btn btn-sm btn-success" title="View Enhanced Order Details"><i class="fa fa-star"></i> Enhanced View</a>');
+        });
 
-        $grid->column('update', __('Update'))
-            ->display(function () {
-                $order = Order::find($this->id);
-                $link = admin_url('orders/' . $order->id . '/edit');
-                return "<a href='$link' class='btn btn-warning btn-sm'>Update</a>";
-            });
+        // Add filters
+        $grid->filter(function($filter) {
+            $filter->disableIdFilter(); // Disable default id filter
+            
+            // Add order state filter
+            $filter->equal('order_state', 'Order Status')->select([
+                0 => 'Pending',
+                1 => 'Processing', 
+                2 => 'Completed',
+                3 => 'Cancelled',
+                4 => 'Failed',
+                5 => 'Refunded'
+            ]);
+            
+            // Add date range filter
+            $filter->between('created_at', 'Order Date')->date();
+            
+            // Add payment status filter
+            $filter->where(function ($query) {
+                $query->where('payment_confirmation', '!=', '')->whereNotNull('payment_confirmation');
+            }, 'Payment Status', 'paid_status')->select([
+                1 => 'Paid',
+                0 => 'Not Paid'
+            ]);
+            
+            // Add total amount range filter
+            $filter->between('order_total', 'Order Total (UGX)')->integer();
+        });
 
         return $grid;
     }
 
+
+
     /**
-     * Make a show builder.
+     * Display enhanced order details view.
      *
      * @param mixed $id
-     * @return Show
+     * @return \Illuminate\Contracts\View\View
      */
-    protected function detail($id)
+    public function detail($id)
     {
         $order = Order::findOrFail($id);
+        
+        // Get additional related data for comprehensive order details
+        $orderItems = $order->get_items();
+        $deliveryAddress = null;
+        $customer = null;
+        
+        // Get delivery address if exists
+        if ($order->delivery_address_id) {
+            $deliveryAddress = DeliveryAddress::find($order->delivery_address_id);
+        }
+        
+        // Get customer details if exists
+        if ($order->user) {
+            $customer = User::find($order->user);
+        }
+        
+        // Calculate order statistics
+        $totalItems = count($orderItems);
+        $totalQuantity = array_sum(array_column($orderItems, 'qty'));
+        
+        // Order status mapping with colors and icons - comprehensive mapping
+        $orderStatuses = [
+            0 => ['text' => 'Pending', 'class' => 'warning', 'icon' => 'clock'],
+            1 => ['text' => 'Processing', 'class' => 'info', 'icon' => 'refresh'],
+            2 => ['text' => 'Completed', 'class' => 'success', 'icon' => 'check-circle'],
+            3 => ['text' => 'Cancelled', 'class' => 'danger', 'icon' => 'x-circle'],
+            4 => ['text' => 'Failed', 'class' => 'danger', 'icon' => 'alert-triangle'],
+            5 => ['text' => 'Refunded', 'class' => 'secondary', 'icon' => 'arrow-left-circle'],
+            // Add fallback for any other values
+            'default' => ['text' => 'Unknown', 'class' => 'secondary', 'icon' => 'question-circle']
+        ];
+        
+        // Ensure we have a valid order state, default to 0 (Pending) if invalid
+        $currentOrderState = $order->order_state ?? 0;
+        
+        // Validate order state is numeric and within expected range
+        if (!is_numeric($currentOrderState) || !array_key_exists(intval($currentOrderState), $orderStatuses)) {
+            Log::warning("Order {$order->id} has invalid order_state: {$order->order_state}, defaulting to 0");
+            $currentOrderState = 0;
+            // Optionally update the order to fix the invalid state
+            $order->order_state = 0;
+        }
+        
+        // Payment gateway mapping
+        $paymentGateways = [
+            'stripe' => 'Stripe',
+            'pesapal' => 'PesaPal',
+            'cash' => 'Cash on Delivery',
+            'bank_transfer' => 'Bank Transfer'
+        ];
+        
         // Display custom view for order details.
-        return view('order', ['order' => $order]);
+        return view('order', compact(
+            'order', 
+            'orderItems', 
+            'deliveryAddress', 
+            'customer', 
+            'totalItems', 
+            'totalQuantity', 
+            'orderStatuses', 
+            'paymentGateways',
+            'currentOrderState'
+        ));
 
         // If using the built-in Show, uncomment below:
         /*

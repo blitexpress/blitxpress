@@ -24,6 +24,8 @@ Route::group([
     $router->resource('products', ProductController::class);
     $router->resource('product-orders', ProductOrderController::class);
     $router->resource('orders', OrderController::class);
+    // Custom route for enhanced order detail view
+    $router->get('orders/{id}/detail', 'OrderController@detail');
     $router->resource('reviews', ReviewController::class);
     $router->resource('images', ImageController::class);
 

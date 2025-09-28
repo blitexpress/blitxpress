@@ -1767,7 +1767,7 @@ class ApiResurceController extends Controller
         $products = $query->paginate($perPage);
 
         // Add computed attributes for each product
-        $products->through(function ($product) {
+        foreach ($products as $product) {
             $product->tags_array = $product->tags_array;
             $product->attributes_array = $product->specifications->map(function ($attr) {
                 return [
@@ -1775,8 +1775,7 @@ class ApiResurceController extends Controller
                     'value' => $attr->value,
                 ];
             })->toArray();
-            return $product;
-        });
+        }
 
         // Record search history if there was a search term
         if ($searchTerm && !empty(trim($searchTerm))) {
@@ -2395,16 +2394,20 @@ class ApiResurceController extends Controller
             $sessionId = $request->input('session_id', $request->header('X-Session-ID', session()->getId()));
             $manifest['recent_search_suggestions'] = SearchHistory::getRecentSearches($userId, $sessionId, 10);
 
-            // Popular/featured products for quick access
+            // Load products for homepage sections (50 each) and merge them
+            $homeSectionProducts = $this->getHomeSectionProducts();
+            $manifest['products'] = $homeSectionProducts;
+
+            // Keep backward compatibility - Popular/featured products for quick access
             $manifest['featured_products'] = Product::where('rates', '>', 4)
                 ->orderBy('rates', 'desc')
                 ->limit(8)
-                ->get(['id', 'name', 'price_1', 'price_2', 'feature_photo', 'category']);
+                ->get(['id', 'name', 'price_1', 'price_2', 'feature_photo', 'category', 'home_section_1', 'home_section_2', 'home_section_3']);
 
             // Recent products
             $manifest['recent_products'] = Product::orderBy('created_at', 'desc')
                 ->limit(8)
-                ->get(['id', 'name', 'price_1', 'price_2', 'feature_photo', 'category']);
+                ->get(['id', 'name', 'price_1', 'price_2', 'feature_photo', 'category', 'home_section_1', 'home_section_2', 'home_section_3']);
 
             return $this->success($manifest, 'Manifest loaded successfully.', 200);
         } catch (\Exception $e) {
@@ -2460,6 +2463,77 @@ class ApiResurceController extends Controller
                     'shipping_cost' => $location->shipping_cost,
                 ];
             });
+    }
+
+    /**
+     * Helper method to get products for homepage sections
+     * Loads 50 products each for home_section_1, home_section_2, home_section_3
+     * Then merges them and returns unique products with home section attributes
+     */
+    private function getHomeSectionProducts()
+    {
+        // Get products for each home section (50 each)
+        $homeSectionFields = [
+            'id', 'name', 'description', 'summary', 'price_1', 'price_2', 'feature_photo', 
+            'category', 'sub_category', 'rates', 'in_stock', 'keywords', 'tags', 
+            'has_colors', 'colors', 'has_sizes', 'sizes', 'created_at', 'updated_at',
+            'home_section_1', 'home_section_2', 'home_section_3'
+        ];
+
+        // Load products for Flash Sales (home_section_1 = 'Yes')
+        $flashSalesProducts = Product::where('home_section_1', 'Yes')
+            ->orderBy('created_at', 'desc')
+            ->limit(50)
+            ->get($homeSectionFields);
+
+        // Load products for Super Buyer (home_section_2 = 'Yes') 
+        $superBuyerProducts = Product::where('home_section_2', 'Yes')
+            ->orderBy('rates', 'desc')
+            ->limit(50)
+            ->get($homeSectionFields);
+
+        // Load products for Top Products (home_section_3 = 'Yes')
+        $topProducts = Product::where('home_section_3', 'Yes')
+            ->orderBy('rates', 'desc')
+            ->orderBy('created_at', 'desc')
+            ->limit(50)
+            ->get($homeSectionFields);
+
+        // Merge all collections and remove duplicates by product ID
+        $allProducts = $flashSalesProducts
+            ->concat($superBuyerProducts)
+            ->concat($topProducts)
+            ->unique('id')
+            ->values(); // Reset array keys
+
+        // Transform products to include all necessary attributes including home sections
+        return $allProducts->map(function ($product) {
+            return [
+                'id' => $product->id,
+                'name' => $product->name,
+                'description' => $product->description,
+                'summary' => $product->summary,
+                'price_1' => (float) $product->price_1, // Selling price
+                'price_2' => (float) $product->price_2, // Original price  
+                'feature_photo' => $product->feature_photo,
+                'category' => $product->category,
+                'sub_category' => $product->sub_category,
+                'rates' => (float) $product->rates,
+                'in_stock' => (int) $product->in_stock,
+                'keywords' => $product->keywords,
+                'tags' => $product->tags,
+                'has_colors' => $product->has_colors,
+                'colors' => $product->colors,
+                'has_sizes' => $product->has_sizes,  
+                'sizes' => $product->sizes,
+                'created_at' => $product->created_at,
+                'updated_at' => $product->updated_at,
+                // Home section attributes - IMPORTANT for frontend filtering
+                'home_section_1' => $product->home_section_1 ?? 'No',
+                'home_section_2' => $product->home_section_2 ?? 'No', 
+                'home_section_3' => $product->home_section_3 ?? 'No',
+            ];
+        });
     }
 
     /**
@@ -2567,7 +2641,7 @@ class ApiResurceController extends Controller
         $products = $query->paginate($perPage);
 
         // Add computed attributes for each product
-        $products->through(function ($product) {
+        foreach ($products as $product) {
             $product->tags_array = $product->tags_array;
             $product->attributes_array = $product->specifications->map(function ($attr) {
                 return [
@@ -2575,8 +2649,7 @@ class ApiResurceController extends Controller
                     'value' => $attr->value,
                 ];
             })->toArray();
-            return $product;
-        });
+        }
 
         return $this->success($products, 'Search by tags completed successfully');
     }
