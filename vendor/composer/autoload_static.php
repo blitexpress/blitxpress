@@ -686,6 +686,7 @@ class ComposerStaticInitda89eef54c810448a827ed04bb3da82f
         'App\\Admin\\Controllers\\SharedCvController' => __DIR__ . '/../..' . '/app/Admin/Controllers/SharedCvController.php',
         'App\\Admin\\Controllers\\SubCountyController' => __DIR__ . '/../..' . '/app/Admin/Controllers/SubCountyController.php',
         'App\\Admin\\Controllers\\SubmitedEmbasyController' => __DIR__ . '/../..' . '/app/Admin/Controllers/SubmitedEmbasyController.php',
+        'App\\Admin\\Controllers\\TinifyModelController' => __DIR__ . '/../..' . '/app/Admin/Controllers/TinifyModelController.php',
         'App\\Admin\\Controllers\\TrainingController' => __DIR__ . '/../..' . '/app/Admin/Controllers/TrainingController.php',
         'App\\Admin\\Controllers\\UserController' => __DIR__ . '/../..' . '/app/Admin/Controllers/UserController.php',
         'App\\Admin\\Controllers\\VendorController' => __DIR__ . '/../..' . '/app/Admin/Controllers/VendorController.php',

@@ -68,6 +68,7 @@ return array(
     'App\\Admin\\Controllers\\SharedCvController' => $baseDir . '/app/Admin/Controllers/SharedCvController.php',
     'App\\Admin\\Controllers\\SubCountyController' => $baseDir . '/app/Admin/Controllers/SubCountyController.php',
     'App\\Admin\\Controllers\\SubmitedEmbasyController' => $baseDir . '/app/Admin/Controllers/SubmitedEmbasyController.php',
+    'App\\Admin\\Controllers\\TinifyModelController' => $baseDir . '/app/Admin/Controllers/TinifyModelController.php',
     'App\\Admin\\Controllers\\TrainingController' => $baseDir . '/app/Admin/Controllers/TrainingController.php',
     'App\\Admin\\Controllers\\UserController' => $baseDir . '/app/Admin/Controllers/UserController.php',
     'App\\Admin\\Controllers\\VendorController' => $baseDir . '/app/Admin/Controllers/VendorController.php',
