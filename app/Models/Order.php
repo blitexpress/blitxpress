@@ -46,7 +46,8 @@ class Order extends Model
         'pesapal_payment_method',
         'pesapal_redirect_url',
         'payment_status',
-        'payment_completed_at'
+        'payment_completed_at',
+        'pay_on_delivery'
     ];
 
     //boot

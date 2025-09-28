@@ -14,7 +14,8 @@ class AddPayOnDeliveryToOrdersTable extends Migration
     public function up()
     {
         Schema::table('orders', function (Blueprint $table) {
-            //
+            // Add pay_on_delivery field - boolean with default false (no COD by default)
+            $table->boolean('pay_on_delivery')->default(false)->after('payment_status');
         });
     }
 
@@ -26,7 +27,7 @@ class AddPayOnDeliveryToOrdersTable extends Migration
     public function down()
     {
         Schema::table('orders', function (Blueprint $table) {
-            //
+            $table->dropColumn('pay_on_delivery');
         });
     }
 }

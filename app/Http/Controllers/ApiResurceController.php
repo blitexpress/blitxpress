@@ -833,6 +833,16 @@ class ApiResurceController extends Controller
         $order->payment_status = 'PENDING_PAYMENT';
         $order->description = '';
         $order->mail = $u->email;
+        
+        // Handle pay on delivery option
+        $order->pay_on_delivery = $r->pay_on_delivery === 'true' || $r->pay_on_delivery === true || $r->pay_on_delivery === 1;
+        
+        // If pay on delivery is selected, update payment status and confirmation
+        if ($order->pay_on_delivery) {
+            $order->payment_status = 'PAY_ON_DELIVERY';
+            $order->payment_gateway = 'cash_on_delivery';
+        }
+        
         $delivery_amount = 0;
         if ($delivery != null) {
             try {
@@ -954,6 +964,15 @@ class ApiResurceController extends Controller
         $order->mail = $u->email;
         $order->date_created = Carbon::now();
         $order->date_updated = Carbon::now();
+        
+        // Handle pay on delivery option
+        $order->pay_on_delivery = $r->pay_on_delivery === 'true' || $r->pay_on_delivery === true || $r->pay_on_delivery === 1;
+        
+        // If pay on delivery is selected, update payment status
+        if ($order->pay_on_delivery) {
+            $order->payment_status = 'PAY_ON_DELIVERY';
+            $order->payment_gateway = 'cash_on_delivery';
+        }
         if ($delivery != null) {
             try {
                 $order->customer_phone_number_1 = $delivery->phone_number;
@@ -1078,6 +1097,15 @@ class ApiResurceController extends Controller
         $order->mail = $u->email;
         $order->date_created = Carbon::now();
         $order->date_updated = Carbon::now();
+        
+        // Handle pay on delivery option
+        $order->pay_on_delivery = $r->pay_on_delivery === 'true' || $r->pay_on_delivery === true || $r->pay_on_delivery === 1;
+        
+        // If pay on delivery is selected, override payment settings
+        if ($order->pay_on_delivery) {
+            $order->payment_status = 'PAY_ON_DELIVERY';
+            $order->payment_gateway = 'cash_on_delivery';
+        }
 
         if ($delivery != null) {
             try {
