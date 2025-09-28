@@ -813,15 +813,13 @@ class ApiResurceController extends Controller
                     
                     if ($emailType) {
                         $stats['emails_pending']++;
-                        Log::info("Order {$order->id}: Needs {$emailType} email (state: {$order->order_state})");
+                        Log::info("Order {$order->id}: Sending {$emailType} email (state: {$order->order_state})");
                         
-                        // Skip actually sending emails in this basic version to prevent timeout
-                        // Just identify what needs to be sent
+                        // Send the email using the existing Order model method
+                        Order::send_mails($order);
+                        
+                        $stats['emails_sent']++;
                         $stats['by_type'][$emailType]++;
-                        
-                        // Uncomment the line below to actually send emails:
-                        // Order::send_mails($order);
-                        // $stats['emails_sent']++;
                     }
                 } catch (\Throwable $e) {
                     Log::error("Error processing order {$order->id}: " . $e->getMessage());
@@ -836,8 +834,7 @@ class ApiResurceController extends Controller
 
             return $this->success([
                 'message' => 'Email check completed successfully',
-                'statistics' => $stats,
-                'note' => 'Email sending is currently disabled for testing. Uncomment line in controller to enable.'
+                'statistics' => $stats
             ], 'Email check completed', 200);
 
         } catch (\Throwable $e) {
