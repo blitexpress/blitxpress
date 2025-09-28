@@ -797,6 +797,7 @@ class ApiResurceController extends Controller
             // Get orders that might need email notifications
             // Limit to last 7 days and maximum 50 orders to prevent timeout
             $orders = Order::where([]) 
+                ->orderBy('id', 'desc')
                 ->limit(50)
                 ->get();
 
