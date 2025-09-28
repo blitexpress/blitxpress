@@ -773,7 +773,7 @@ class ApiResurceController extends Controller
     public function check_and_send_pending_emails(Request $request)
     {
         // Set time limit for this operation
-        set_time_limit(120); // 2 minutes max
+        set_time_limit(1200); // 20 minutes max
         
         try {
             Log::info('=== Starting pending email check via API endpoint ===');
@@ -796,10 +796,7 @@ class ApiResurceController extends Controller
 
             // Get orders that might need email notifications
             // Limit to last 7 days and maximum 50 orders to prevent timeout
-            $orders = Order::where('created_at', '>=', now()->subDays(7))
-                ->whereNotNull('mail')
-                ->where('mail', '!=', '')
-                ->orderBy('created_at', 'desc')
+            $orders = Order::where([]) 
                 ->limit(50)
                 ->get();
 
