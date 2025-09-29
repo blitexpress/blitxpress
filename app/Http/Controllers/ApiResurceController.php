@@ -773,7 +773,7 @@ class ApiResurceController extends Controller
     public function check_and_send_pending_emails(Request $request)
     {
         // Set time limit for this operation
-        set_time_limit(1200); // 20 minutes max
+        set_time_limit(120); // 2 minutes max
         
         try {
             Log::info('=== Starting pending email check via API endpoint ===');
@@ -795,8 +795,11 @@ class ApiResurceController extends Controller
             ];
 
             // Get orders that might need email notifications
-            // Limit to last 7 days and maximum 50 orders to prevent timeout
-            $orders = Order::where([]) 
+            // Only get orders that have valid email addresses and are from last 7 days
+            $orders = Order::where('created_at', '>=', now()->subDays(7))
+                ->whereNotNull('mail')
+                ->where('mail', '!=', '')
+                ->where('mail', 'LIKE', '%@%') // Basic email validation
                 ->orderBy('id', 'desc')
                 ->limit(50)
                 ->get();
@@ -806,18 +809,23 @@ class ApiResurceController extends Controller
 
             foreach ($orders as $order) {
                 try {
-                    // Determine what email type should be sent based on order state
+                    // Use the SAME logic as Order model to determine what email type should be sent
                     $emailType = $this->getEmailTypeToSend($order);
                     
                     if ($emailType) {
                         $stats['emails_pending']++;
-                        Log::info("Order {$order->id}: Sending {$emailType} email (state: {$order->order_state})");
+                        Log::info("Order {$order->id}: Needs {$emailType} email (state: {$order->order_state})");
                         
-                        // Send the email using the existing Order model method
+                        // Use the Order model's send_mails method which already has proper tracking
                         Order::send_mails($order);
                         
                         $stats['emails_sent']++;
                         $stats['by_type'][$emailType]++;
+                        
+                        // Small delay to prevent overwhelming the mail server
+                        usleep(100000); // 0.1 seconds
+                    } else {
+                        Log::debug("Order {$order->id}: No email needed (state: {$order->order_state})");
                     }
                 } catch (\Throwable $e) {
                     Log::error("Error processing order {$order->id}: " . $e->getMessage());
@@ -845,7 +853,7 @@ class ApiResurceController extends Controller
 
     /**
      * Helper method to determine what type of email needs to be sent
-     * Mirrors the logic from Order model but can be customized
+     * This MUST match exactly the logic in Order::getEmailTypeToSend() to prevent duplicate emails
      */
     private function getEmailTypeToSend($order)
     {
@@ -867,10 +875,10 @@ class ApiResurceController extends Controller
         $emailType = $stateMap[$state];
         $sentField = $emailType . '_mail_sent';
         
-        // Check if this email type has already been sent
+        // Check if this email type has already been sent - CRITICAL: This prevents duplicate emails
         $alreadySent = $order->{$sentField} === 'Yes';
 
-        // Additional logic: For pending orders, also check if order is older than 5 minutes
+        // Additional logic: For pending orders, check if order is older than 5 minutes
         // This prevents sending emails immediately after order creation
         if ($emailType === 'pending') {
             $orderAge = $order->created_at->diffInMinutes(now());
@@ -880,8 +888,9 @@ class ApiResurceController extends Controller
             }
         }
 
-        Log::debug("Order {$order->id} - State: {$state} ({$emailType}), {$sentField}: " . ($order->{$sentField} ?? 'NULL') . ", Should send: " . ($alreadySent ? 'No' : 'Yes'));
+        Log::debug("Order {$order->id} - State: {$state} ({$emailType}), {$sentField}: " . ($order->{$sentField} ?? 'NULL') . ", Already sent: " . ($alreadySent ? 'Yes' : 'No'));
 
+        // Return null if email was already sent, otherwise return the email type
         return $alreadySent ? null : $emailType;
     }
 
