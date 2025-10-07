@@ -624,6 +624,20 @@ EOD;
         return $value;
     }
 
+    //getter for customer_name
+    public function getCustomerNameAttribute($value)
+    {
+        if ($value == null || strlen($value) < 3) {
+            try {
+                $this->fill_missing_data();
+            } catch (\Throwable $th) {
+                //throw $th;
+            }
+            return 'N/A';
+        }
+        return $value;
+    } 
+
     public function fill_missing_data()
     {
         $order_details = null;
@@ -764,8 +778,5 @@ EOD;
   "phone_number" => "0783877626"
         */
 
-        dd($order_details);
-        dd('fill_missing_data');
-        dd($this->order_details);
     }
 }
