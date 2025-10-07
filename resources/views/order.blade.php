@@ -638,6 +638,102 @@
                 </div>
             </div>
 
+            <!-- Additional Order Details (from JSON) -->
+            @php
+                $orderDetailsData = null;
+                try {
+                    $orderDetailsData = json_decode($order->order_details, true);
+                } catch (\Exception $e) {
+                    $orderDetailsData = null;
+                }
+
+                // Define fields to display with nice labels
+                $fieldsToDisplay = [
+                    'customer_name' => ['label' => 'Customer Name', 'icon' => 'person'],
+                    'mail' => ['label' => 'Email Address', 'icon' => 'envelope', 'type' => 'email'],
+                    'customer_phone_number_1' => ['label' => 'Phone Number 1', 'icon' => 'telephone', 'type' => 'phone'],
+                    'customer_phone_number_2' => ['label' => 'Phone Number 2', 'icon' => 'telephone', 'type' => 'phone'],
+                    'phone_number' => ['label' => 'Contact Phone', 'icon' => 'telephone', 'type' => 'phone'],
+                    'phone_number_1' => ['label' => 'Alt Phone 1', 'icon' => 'telephone', 'type' => 'phone'],
+                    'phone_number_2' => ['label' => 'Alt Phone 2', 'icon' => 'telephone', 'type' => 'phone'],
+                    'customer_address' => ['label' => 'Customer Address', 'icon' => 'geo-alt'],
+                    'delivery_method' => ['label' => 'Delivery Method', 'icon' => 'truck', 'type' => 'badge'],
+                    'delivery_address_text' => ['label' => 'Delivery Location', 'icon' => 'pin-map'],
+                    'delivery_address_details' => ['label' => 'Delivery Details', 'icon' => 'info-circle'],
+                    'delivery_district' => ['label' => 'Delivery District', 'icon' => 'map'],
+                    'delivery_amount' => ['label' => 'Delivery Fee', 'icon' => 'cash', 'type' => 'currency'],
+                    'payable_amount' => ['label' => 'Total Payable', 'icon' => 'currency-dollar', 'type' => 'currency'],
+                    'order_total' => ['label' => 'Order Total', 'icon' => 'calculator', 'type' => 'currency'],
+                    'payment_confirmation' => ['label' => 'Payment Status', 'icon' => 'check-circle'],
+                    'description' => ['label' => 'Order Description', 'icon' => 'card-text'],
+                ];
+
+                // Filter out empty values and already displayed values
+                $extraDetails = [];
+                if ($orderDetailsData && is_array($orderDetailsData)) {
+                    foreach ($fieldsToDisplay as $key => $info) {
+                        if (isset($orderDetailsData[$key]) && 
+                            !empty($orderDetailsData[$key]) && 
+                            $orderDetailsData[$key] !== '' && 
+                            $orderDetailsData[$key] !== '0' && 
+                            $orderDetailsData[$key] !== 0 &&
+                            $orderDetailsData[$key] !== '0.00') {
+                            $extraDetails[$key] = [
+                                'label' => $info['label'],
+                                'value' => $orderDetailsData[$key],
+                                'icon' => $info['icon'],
+                                'type' => $info['type'] ?? 'text'
+                            ];
+                        }
+                    }
+                }
+            @endphp
+
+            @if(count($extraDetails) > 0)
+            <div class="order-class-card">
+                <div class="order-class-section-header">
+                    <i class="bi bi-info-circle-fill"></i>
+                    <h2 class="order-class-section-title">Additional Order Details</h2>
+                </div>
+
+                <div class="order-class-info-grid">
+                    @foreach($extraDetails as $key => $detail)
+                        <div class="order-class-info-field">
+                            <div class="order-class-field-label">
+                                <i class="bi bi-{{ $detail['icon'] }}"></i> {{ $detail['label'] }}
+                            </div>
+                            <div class="order-class-field-value">
+                                @if($detail['type'] === 'currency')
+                                    <strong style="color: #667eea;">UGX {{ number_format((float)$detail['value'], 0) }}</strong>
+                                @elseif($detail['type'] === 'email')
+                                    <a href="mailto:{{ $detail['value'] }}">
+                                        <i class="bi bi-envelope"></i> {{ $detail['value'] }}
+                                    </a>
+                                @elseif($detail['type'] === 'phone')
+                                    <a href="tel:{{ $detail['value'] }}">
+                                        <i class="bi bi-telephone"></i> {{ $detail['value'] }}
+                                    </a>
+                                @elseif($detail['type'] === 'badge')
+                                    <span class="order-class-badge info">
+                                        <i class="bi bi-truck"></i> {{ ucfirst($detail['value']) }}
+                                    </span>
+                                @else
+                                    {{ $detail['value'] }}
+                                @endif
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+
+                @if(isset($orderDetailsData['pay_on_delivery']) && $orderDetailsData['pay_on_delivery'])
+                <div style="margin-top: 1rem; padding: 1rem; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 8px; border-left: 4px solid #f59e0b;">
+                    <i class="bi bi-cash-coin" style="color: #d97706;"></i>
+                    <strong style="color: #92400e;">Pay on Delivery</strong> - Customer will pay cash upon receiving the order
+                </div>
+                @endif
+            </div>
+            @endif
+
             <!-- Order Items -->
             <div class="order-class-card">
                 <div class="order-class-section-header">
@@ -933,6 +1029,9 @@
             </div>
         </div>
     </div>
+
+
+
 
     <!-- Order Notes -->
     @if (isset($order->description) && $order->description)

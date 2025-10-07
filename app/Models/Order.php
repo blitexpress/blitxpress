@@ -61,14 +61,10 @@ class Order extends Model
     {
         parent::boot();
         //created
-        self::created(function ($m) {
-             
-        });
+        self::created(function ($m) {});
 
         //updated
-        self::updated(function ($m) {
-             
-        });
+        self::updated(function ($m) {});
 
 
         self::deleting(function ($m) {
@@ -612,5 +608,164 @@ EOD;
         if ($linkResp == null) {
             throw new \Exception("Error Processing Request", 1);
         }
+    }
+
+    //getter for customer_address
+    public function getCustomerPhoneNumber1Attribute($value)
+    {
+        if ($value == null || strlen($value) < 3) {
+            try {
+                $this->fill_missing_data();
+            } catch (\Throwable $th) {
+                //throw $th;
+            }
+            return 'N/A';
+        }
+        return $value;
+    }
+
+    public function fill_missing_data()
+    {
+        $order_details = null;
+        try {
+            $order_details = json_decode($this->order_details, true);
+        } catch (\Throwable $th) {
+            //throw $th;
+        }
+        if ($order_details == null) {
+            return;
+        }
+
+
+        $data = [];
+        if ($this->date_created == null && strlen($this->created_at) > 3) {
+            $data['date_created'] = $this->created_at;
+        }
+        if (($this->attributes['customer_phone_number_1'] == null ||
+                strlen($this->attributes['customer_phone_number_1']) < 3
+            )
+            && isset($order_details['phone_number_1']) && strlen($order_details['phone_number_1']) > 3
+        ) {
+            $data['customer_phone_number_1'] = $order_details['phone_number_1'];
+        }
+        if (($this->attributes['customer_phone_number_2'] == null ||
+                strlen($this->attributes['customer_phone_number_2']) < 3
+            )
+            && isset($order_details['phone_number_2']) && strlen($order_details['phone_number_2']) > 3
+        ) {
+            $data['customer_phone_number_2'] = $order_details['phone_number_2'];
+        }
+        if (($this->attributes['customer_name'] == null ||
+                strlen($this->attributes['customer_name']) < 3
+            )
+            && isset($order_details['customer_name']) && strlen($order_details['customer_name']) > 3
+        ) {
+            $data['customer_name'] = $order_details['customer_name'];
+        }
+        if (($this->attributes['customer_address'] == null ||
+                strlen($this->attributes['customer_address']) < 3
+            )
+            && isset($order_details['customer_address']) && strlen($order_details['customer_address']) > 3
+        ) {
+            $data['customer_address'] = $order_details['customer_address'];
+        }
+
+        //delivery_address_id
+        if (($this->attributes['delivery_district'] == null ||
+                strlen($this->attributes['delivery_district']) < 1
+            )
+            && isset($order_details['delivery_address_text']) && strlen($order_details['delivery_address_text']) > 1
+        ) {
+            $data['delivery_district'] = $order_details['delivery_address_text'];
+        }
+
+        //customer_address
+
+        if (count($data) < 1) {
+            return;
+        }
+        //update using DB facade to avoid triggering model events
+        DB::table('orders')->where('id', $this->id)->update($data);
+
+
+        /* 
+ 
+    "payment_confirmation" => ""
+    "date_updated" => null
+    "mail" => "wandukwaamok@gmail.com"
+    "delivery_district" => null
+    "temporary_id" => 0
+    "description" => ""
+    "customer_name" => null
+    "customer_phone_number_1" => null
+    "customer_phone_number_2" => null
+    "customer_address" => null
+    "order_total" => "15000"
+    "order_details" => "{"id":0,"created_at":"","updated_at":"","user":"","order_state":"","amount":"","date_created":"","payment_confirmation":"","date_updated":"","mail":"wandukwaamo ▶"
+    "stripe_id" => null
+    "stripe_url" => null
+    "stripe_paid" => "No"
+    "pending_mail_sent" => "Yes"
+    "processing_mail_sent" => "Yes"
+    "completed_mail_sent" => "No"
+    "canceled_mail_sent" => "No"
+    "failed_mail_sent" => "No"
+    "sub_total" => 0
+    "tax" => 0
+    "discount" => 0
+    "delivery_fee" => 0
+    "payment_gateway" => "manual"
+    "pesapal_order_tracking_id" => null
+    "pesapal_merchant_reference" => null
+    "pesapal_status" => null
+    "pesapal_payment_method" => null
+    "pesapal_redirect_url" => null
+    "payment_status" => "PENDING_PAYMENT"
+    "pay_on_delivery" => 0
+    "payment_completed_at" => null
+
+        */
+
+        /* 
+          "id" => 0
+  "created_at" => ""
+  "updated_at" => ""
+  "user" => ""
+  "order_state" => ""
+  "amount" => ""
+  "date_created" => ""
+  "payment_confirmation" => ""
+  "date_updated" => ""
+  "mail" => "wandukwaamok@gmail.com"
+  "items" => ""
+  "delivery_district" => ""
+  "temporary_id" => ""
+  "temporary_text" => ""
+  "description" => ""
+  "customer_name" => "Wasike Wasike"
+  "customer_phone_number_1" => "0783877626"
+  "customer_phone_number_2" => ""
+  "customer_address" => "Lwakhakha "
+  "order_total" => ""
+  "order_details" => ""
+  "stripe_id" => ""
+  "stripe_text" => ""
+  "stripe_url" => ""
+  "stripe_paid" => ""
+  "delivery_method" => "delivery"
+  "delivery_address_id" => "3"
+  "delivery_address_text" => "Mbale (Eastern Region Pickup)"
+  "delivery_address_details" => "Lwakhakha "
+  "delivery_amount" => "0.00"
+  "payable_amount" => "15000.0"
+  "pay_on_delivery" => true
+  "phone_number_2" => "0783877626"
+  "phone_number_1" => "0783877626"
+  "phone_number" => "0783877626"
+        */
+
+        dd($order_details);
+        dd('fill_missing_data');
+        dd($this->order_details);
     }
 }

@@ -19,6 +19,54 @@ use Illuminate\Support\Facades\Route;
     return response()->json(['message' => 'BlitXpress API is running']);
 }); */
 
+Route::get('order', function (Request $r) {
+    $order = Order::find(170);
+    $order->customer_phone_number_1;
+    die("done");
+    dd($order->order_details);
+    /* 
+        "id" => 170
+    "created_at" => "2025-10-06 18:10:53"
+    "updated_at" => "2025-10-06 19:28:00"
+    "user" => 306
+    "order_state" => "1"
+    "amount" => "15000"
+    "date_created" => null
+    "payment_confirmation" => ""
+    "date_updated" => null
+    "mail" => "wandukwaamok@gmail.com"
+    "delivery_district" => null
+    "temporary_id" => 0
+    "description" => ""
+    "customer_name" => null
+    "customer_phone_number_1" => null
+    "customer_phone_number_2" => null
+    "customer_address" => null
+    "order_total" => "15000"
+    "order_details" => "{"id":0,"created_at":"","updated_at":"","user":"","order_state":"","amount":"","date_created":"","payment_confirmation":"","date_updated":"","mail":"wandukwaamo ▶"
+    "stripe_id" => null
+    "stripe_url" => null
+    "stripe_paid" => "No"
+    "pending_mail_sent" => "Yes"
+    "processing_mail_sent" => "Yes"
+    "completed_mail_sent" => "No"
+    "canceled_mail_sent" => "No"
+    "failed_mail_sent" => "No"
+    "sub_total" => 0
+    "tax" => 0
+    "discount" => 0
+    "delivery_fee" => 0
+    "payment_gateway" => "manual"
+    "pesapal_order_tracking_id" => null
+    "pesapal_merchant_reference" => null
+    "pesapal_status" => null
+    "pesapal_payment_method" => null
+    "pesapal_redirect_url" => null
+    "payment_status" => "PENDING_PAYMENT"
+    "pay_on_delivery" => 0
+    "payment_completed_at" => null
+    */
+});
 Route::get('do-send-notofocation', function (Request $r) {
     try {
         $notificationId = $r->input('id');

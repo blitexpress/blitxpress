@@ -117,8 +117,8 @@ class OrderController extends AdminController
 
         $grid->column('description', __('Description'))->hide();
         $grid->column('customer_name', __('Customer'))->sortable();
-        $grid->column('customer_phone_number_1', __('Customer Contact'));
-        $grid->column('customer_phone_number_2', __('Alternate Contact'))->hide();
+        $grid->column('customer_phone_number_1', __('Customer Contact'))->sortable();
+        $grid->column('customer_phone_number_2', __('Alternate Contact'))->sortable();
         $grid->column('customer_address', __('Customer Address'));
 
        
